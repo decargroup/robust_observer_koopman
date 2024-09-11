@@ -3,6 +3,7 @@
 import itertools
 import pathlib
 import re
+import shutil
 
 import control
 import doit
@@ -22,6 +23,34 @@ WD = pathlib.Path(__file__).parent.resolve()
 
 # Number of training episodes
 N_TRAIN = 18
+
+# Okabe-Ito colorscheme: https://jfly.uni-koeln.de/color/
+OKABE_ITO = {
+    "black": (0.00, 0.00, 0.00),
+    "orange": (0.90, 0.60, 0.00),
+    "sky blue": (0.35, 0.70, 0.90),
+    "bluish green": (0.00, 0.60, 0.50),
+    "yellow": (0.95, 0.90, 0.25),
+    "blue": (0.00, 0.45, 0.70),
+    "vermillion": (0.80, 0.40, 0.00),
+    "reddish purple": (0.80, 0.60, 0.70),
+    "grey": (0.60, 0.60, 0.60),
+}
+
+# LaTeX linewidth (inches)
+LW = 3.5
+
+# Set gobal Matplotlib options
+plt.rc("lines", linewidth=1.5)
+plt.rc("axes", grid=True)
+plt.rc("grid", linestyle="--")
+# Set LaTeX rendering only if available
+usetex = True if shutil.which("latex") else False
+if usetex:
+    plt.rc("text", usetex=True)
+    plt.rc("font", family="serif")
+    plt.rc("font", size=9)
+    plt.rc("text.latex", preamble=r"\usepackage{amsmath}")
 
 
 def task_preprocess_experiments():
@@ -351,6 +380,26 @@ def task_synthesize_observer():
             err_plot_koopman,
             fft_plot_koopman,
         ],
+        "clean": True,
+    }
+
+
+def task_plot_fft():
+    """Plot error FFT."""
+    dataset = WD.joinpath("build", "dataset.pickle")
+    error_fft = WD.joinpath("figures", "error_fft.pdf")
+    return {
+        "actions": [
+            (
+                action_plot_fft,
+                (
+                    dataset,
+                    error_fft,
+                ),
+            )
+        ],
+        "file_dep": [dataset],
+        "targets": [error_fft],
         "clean": True,
     }
 
@@ -1146,6 +1195,67 @@ def action_synthesize_observer(
     # Save results
     observer_path.parent.mkdir(exist_ok=True)
     joblib.dump(results, observer_path)
+
+
+def action_plot_fft(
+    dataset_path: pathlib.Path,
+    error_fft_path: pathlib.Path,
+):
+    """Plot error FFT."""
+    dataset = joblib.load(dataset_path)
+    # Settings
+    t_step = dataset.attrs["t_step"]
+    min_length = 600
+    min_vel = 3
+    trim = 100
+    dataset_ep = dataset.loc[
+        (dataset["serial_no"] == "009017")
+        & (~dataset["load"])
+        & (dataset["episode"] == 0)
+    ]
+    tvel = dataset_ep["target_joint_vel"].to_numpy()
+    vel = dataset_ep["joint_vel"].to_numpy()
+    # Find points where velocity changes
+    vel_changes = np.ravel(np.argwhere(np.diff(tvel, prepend=0) != 0))
+    # Split into constant-velocity segments
+    X = np.vstack(
+        [
+            vel,
+            tvel,
+        ]
+    ).T
+    const_vel_segments = np.split(X, vel_changes)
+    # Find first segment of required length and speed
+    for segment in const_vel_segments:
+        X_const_vel = segment[trim:-trim, :]
+        if segment.shape[0] > min_length:
+            if np.all(segment[:, 1] > min_vel):
+                # Compute normalized velocity error in that segment
+                vel_err = X_const_vel[:, 1] - X_const_vel[:, 0]
+                f, pos_err_spec = scipy.signal.welch(
+                    vel_err,
+                    fs=(1 / t_step),
+                    nperseg=512,
+                )
+                fig, ax = plt.subplots(
+                    constrained_layout=True,
+                    figsize=(LW, LW),
+                )
+                ax.semilogy(f, pos_err_spec, color=OKABE_ITO["blue"])
+                ax.set_yticks([10**i for i in range(-9, -3)])
+                ax.set_xticks(np.arange(0, 550, 50))
+                ax.set_xlabel(r"$f$ (Hz)")
+                ax.set_ylabel(
+                    r"$S_{\dot{\theta}^\mathrm{e}\dot{\theta}^\mathrm{e}}(f)$ "
+                    r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
+                )
+                break
+    error_fft_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        error_fft_path,
+        bbox_inches="tight",
+        pad_inches=0.05,
+    )
 
 
 def _circular_mean(theta: np.ndarray) -> float:
