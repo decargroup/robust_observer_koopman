@@ -11,8 +11,10 @@ import numpy as np
 import pandas
 import pykoop
 import scipy.linalg
+from matplotlib import pyplot as plt
 
-from onesine import OneSineLiftingFn
+import onesine
+import tf_cover
 
 # Directory containing ``dodo.py``
 WD = pathlib.Path(__file__).parent.resolve()
@@ -63,7 +65,6 @@ def task_id_models():
     preprocessed_dataset = WD.joinpath("build", "dataset.pickle")
     phase = WD.joinpath("build", "phase.pickle")
     models_linear = WD.joinpath("build", "models_linear.pickle")
-    models_koopman = WD.joinpath("build", "models_koopman.pickle")
     yield {
         "name": "linear",
         "actions": [
@@ -76,6 +77,7 @@ def task_id_models():
         "targets": [models_linear],
         "clean": True,
     }
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
     yield {
         "name": "koopman",
         "actions": [
@@ -93,9 +95,7 @@ def task_id_models():
 def task_compute_residuals():
     """Compute residuals from linear and Koopman models."""
     models_linear = WD.joinpath("build", "models_linear.pickle")
-    models_koopman = WD.joinpath("build", "models_koopman.pickle")
     residuals_linear = WD.joinpath("build", "residuals_linear.pickle")
-    residuals_koopman = WD.joinpath("build", "residuals_koopman.pickle")
     yield {
         "name": "linear",
         "actions": [
@@ -108,6 +108,8 @@ def task_compute_residuals():
         "targets": [residuals_linear],
         "clean": True,
     }
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    residuals_koopman = WD.joinpath("build", "residuals_koopman.pickle")
     yield {
         "name": "koopman",
         "actions": [
@@ -118,6 +120,158 @@ def task_compute_residuals():
         ],
         "file_dep": [models_koopman],
         "targets": [residuals_koopman],
+        "clean": True,
+    }
+
+
+def task_generate_uncertainty_weights():
+    """Generate uncertainty weights models."""
+    residuals_koopman = WD.joinpath("build", "residuals_koopman.pickle")
+    orders_koopman = np.array(
+        [
+            [1, 3],
+            [3, 3],
+        ]
+    )
+    uncertainty_koopman_noload = WD.joinpath(
+        "build", "uncertainty_koopman_noload.pickle"
+    )
+    uncertainty_mimo_koopman_noload = WD.joinpath(
+        "build", "uncertainty_mimo_koopman_noload.png"
+    )
+    uncertainty_msv_koopman_noload = WD.joinpath(
+        "build", "uncertainty_msv_koopman_noload.png"
+    )
+    nominal_noload = WD.joinpath("build", "nominal_noload.txt")
+    yield {
+        "name": "koopman_noload",
+        "actions": [
+            (
+                action_generate_uncertainty_weights,
+                (
+                    residuals_koopman,
+                    nominal_noload,
+                    uncertainty_koopman_noload,
+                    uncertainty_mimo_koopman_noload,
+                    uncertainty_msv_koopman_noload,
+                    orders_koopman,
+                    "koopman",
+                    "noload",
+                ),
+            )
+        ],
+        "file_dep": [residuals_koopman],
+        "targets": [
+            uncertainty_koopman_noload,
+            nominal_noload,
+            uncertainty_mimo_koopman_noload,
+            uncertainty_msv_koopman_noload,
+        ],
+        "clean": True,
+    }
+    uncertainty_koopman_load = WD.joinpath("build", "uncertainty_koopman_load.pickle")
+    uncertainty_mimo_koopman_load = WD.joinpath(
+        "build", "uncertainty_mimo_koopman_load.png"
+    )
+    uncertainty_msv_koopman_load = WD.joinpath(
+        "build", "uncertainty_msv_koopman_load.png"
+    )
+    nominal_load = WD.joinpath("build", "nominal_load.txt")
+    yield {
+        "name": "koopman_load",
+        "actions": [
+            (
+                action_generate_uncertainty_weights,
+                (
+                    residuals_koopman,
+                    nominal_load,
+                    uncertainty_koopman_load,
+                    uncertainty_mimo_koopman_load,
+                    uncertainty_msv_koopman_load,
+                    orders_koopman,
+                    "koopman",
+                    "load",
+                ),
+            )
+        ],
+        "file_dep": [residuals_koopman],
+        "targets": [
+            uncertainty_koopman_load,
+            nominal_load,
+            uncertainty_mimo_koopman_load,
+            uncertainty_msv_koopman_load,
+        ],
+        "clean": True,
+    }
+    residuals_linear = WD.joinpath("build", "residuals_linear.pickle")
+    orders_linear = np.array(
+        [
+            [1, 2],
+            [1, 2],
+        ]
+    )
+    uncertainty_linear_noload = WD.joinpath("build", "uncertainty_linear_noload.pickle")
+    uncertainty_mimo_linear_noload = WD.joinpath(
+        "build", "uncertainty_mimo_linear_noload.png"
+    )
+    uncertainty_msv_linear_noload = WD.joinpath(
+        "build", "uncertainty_msv_linear_noload.png"
+    )
+    yield {
+        "name": "linear_noload",
+        "actions": [
+            (
+                action_generate_uncertainty_weights,
+                (
+                    residuals_linear,
+                    nominal_noload,
+                    uncertainty_linear_noload,
+                    uncertainty_mimo_linear_noload,
+                    uncertainty_msv_linear_noload,
+                    orders_linear,
+                    "linear",
+                    "noload",
+                ),
+            )
+        ],
+        "file_dep": [residuals_linear, nominal_noload],
+        "targets": [
+            uncertainty_linear_noload,
+            uncertainty_mimo_linear_noload,
+            uncertainty_msv_linear_noload,
+        ],
+        "clean": True,
+    }
+    uncertainty_linear_load = WD.joinpath("build", "uncertainty_linear_load.pickle")
+    uncertainty_mimo_linear_load = WD.joinpath(
+        "build", "uncertainty_mimo_linear_load.png"
+    )
+    uncertainty_msv_linear_load = WD.joinpath(
+        "build", "uncertainty_msv_linear_load.png"
+    )
+    yield {
+        "name": "linear_load",
+        "actions": [
+            (
+                action_generate_uncertainty_weights,
+                (
+                    residuals_linear,
+                    nominal_load,
+                    uncertainty_linear_load,
+                    uncertainty_mimo_linear_load,
+                    uncertainty_msv_linear_load,
+                    orders_linear,
+                    "linear",
+                    "load",
+                ),
+            )
+        ],
+        "file_dep": [residuals_linear, nominal_load],
+        "targets": [
+            uncertainty_linear_load,
+            uncertainty_mimo_linear_load,
+            uncertainty_msv_linear_load,
+        ],
         "clean": True,
     }
 
@@ -286,7 +440,7 @@ def action_id_models(
     dataset_path: pathlib.Path,
     phase_path: pathlib.Path,
     models_path: pathlib.Path,
-    method: str,
+    koopman: str,
 ):
     """Identify linear and Koopman models."""
     dataset = joblib.load(dataset_path)
@@ -308,7 +462,7 @@ def action_id_models(
             ]
         ]
         X_train = X.loc[X["episode"] < n_train].to_numpy()
-        if method == "koopman":
+        if koopman == "koopman":
             # Get optimal phase shift
             phase = joblib.load(phase_path)
             phi_all = phase.loc[(phase["serial_no"] == i[0]) & (phase["load"] == i[1])]
@@ -317,7 +471,7 @@ def action_id_models(
             lf = [
                 (
                     "sin",
-                    OneSineLiftingFn(
+                    onesine.OneSineLiftingFn(
                         f=100,
                         i=0,
                         phi=optimal_phi,
@@ -468,6 +622,92 @@ def action_compute_residuals(
     joblib.dump(df, residuals_path)
 
 
+def action_generate_uncertainty_weights(
+    residuals_path: pathlib.Path,
+    nominal_path: pathlib.Path,
+    uncertainty_path: pathlib.Path,
+    uncertainty_mimo_path: pathlib.Path,
+    uncertainty_msv_path: pathlib.Path,
+    orders: np.ndarray,
+    koopman: str,
+    load: str,
+):
+    """Generate uncertainty weights models."""
+    residuals = joblib.load(residuals_path)
+    t_step = residuals.attrs["t_step"]
+    f = residuals.attrs["f"]
+    omega = 2 * np.pi * f
+    load_bool = load == "load"
+
+    if koopman == "linear":
+        # nominal = joblib.load(nominal_path)
+        nominal = nominal_path.read_text()
+        residuals_ia = residuals.loc[
+            (residuals["uncertainty_form"] == "inverse_input_multiplicative")
+            & (residuals["load"] == load_bool)
+            & (residuals["nominal_serial_no"] == nominal)
+        ]
+    else:
+        residuals_ia = residuals.loc[
+            (residuals["uncertainty_form"] == "inverse_input_multiplicative")
+            & (residuals["load"] == load_bool)
+        ]
+    min_area = residuals_ia.loc[residuals_ia["peak_bound"].idxmin()]
+
+    all = np.abs(np.array(min_area["residuals"]))
+    bound = np.max(all, axis=0)
+
+    fit_bound_arr = np.zeros(orders.shape, dtype=object)
+    for i in range(fit_bound_arr.shape[0]):
+        for j in range(fit_bound_arr.shape[1]):
+            fit_bound_arr[i, j] = tf_cover.tf_cover(omega, bound[i, j, :], orders[i, j])
+    fit_bound = _combine(fit_bound_arr)
+    mag, _, _ = fit_bound.frequency_response(omega)
+
+    fig, ax = plt.subplots(fit_bound_arr.shape[0], fit_bound_arr.shape[1])
+    for i in range(fit_bound_arr.shape[0]):
+        for j in range(fit_bound_arr.shape[1]):
+            for residual in min_area["residuals"]:
+                magnitude = 20 * np.log10(np.abs(residual))
+                ax[i, j].semilogx(f, magnitude[i, j, :], ":k")
+                ax[i, 0].set_ylabel(r"$|W(f)|$ (dB)")
+                ax[-1, j].set_xlabel(r"$f$ (Hz)")
+            ax[i, j].semilogx(f, 20 * np.log10(bound[i, j, :]), "r", lw=3, label="max")
+            ax[i, j].semilogx(f, 20 * np.log10(mag[i, j, :]), "--b", lw=3, label="fit")
+    fig.suptitle(f"{koopman} uncertainty bounds, {load}")
+    for a in ax.ravel():
+        a.grid(ls="--")
+    uncertainty_mimo_path.parent.mkdir(exist_ok=True)
+    fig.savefig(uncertainty_mimo_path)
+
+    max_sv = min_area["bound"]
+    max_sv_fit = np.array([scipy.linalg.svdvals(fit_bound(1j * w))[0] for w in omega])
+    fig, ax = plt.subplots()
+    ax.semilogx(f, 20 * np.log10(max_sv), "r", lw=3)
+    ax.semilogx(f, 20 * np.log10(max_sv_fit), "--b", lw=3)
+    ax.grid(ls="--")
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$\bar{\sigma}(W(f))$ (dB)")
+    ax.set_title(f"{koopman} uncertainty bound, {load}")
+    uncertainty_msv_path.parent.mkdir(exist_ok=True)
+    fig.savefig(uncertainty_msv_path)
+
+    nominal_serial_no = min_area["nominal_serial_no"]
+    if koopman == "koopman":
+        nominal_path.parent.mkdir(exist_ok=True)
+        # joblib.dump(nominal_serial_no, nominal_path)
+        nominal_path.write_text(nominal_serial_no)
+
+    data = {
+        "nominal_serial_no": nominal_serial_no,
+        "bound": bound,
+        "fit_bound": fit_bound,
+        "t_step": t_step,
+    }
+    uncertainty_path.parent.mkdir(exist_ok=True)
+    joblib.dump(data, uncertainty_path)
+
+
 def _circular_mean(theta: np.ndarray) -> float:
     """Circular mean."""
     avg_sin = np.mean(np.sin(theta))
@@ -535,3 +775,22 @@ def _transfer_matrix(f, ss, t_step):
     z = np.exp(1j * 2 * np.pi * f * t_step)
     G = ss.C @ scipy.linalg.solve((np.diag([z] * ss.A.shape[0]) - ss.A), ss.B) + ss.D
     return G
+
+
+def _combine(G):
+    """Combine arraylike of transfer functions into a MIMO TF."""
+    G = np.array(G)
+    num = []
+    den = []
+    for i_out in range(G.shape[0]):
+        for j_out in range(G[i_out, 0].noutputs):
+            num_row = []
+            den_row = []
+            for i_in in range(G.shape[1]):
+                for j_in in range(G[i_out, i_in].ninputs):
+                    num_row.append(G[i_out, i_in].num[j_out][j_in])
+                    den_row.append(G[i_out, i_in].den[j_out][j_in])
+            num.append(num_row)
+            den.append(den_row)
+    G_tf = control.TransferFunction(num, den, dt=G[0][0].dt)
+    return G_tf
