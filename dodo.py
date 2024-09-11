@@ -13,11 +13,15 @@ import pykoop
 import scipy.linalg
 from matplotlib import pyplot as plt
 
+import obs_syn
 import onesine
 import tf_cover
 
 # Directory containing ``dodo.py``
 WD = pathlib.Path(__file__).parent.resolve()
+
+# Number of training episodes
+N_TRAIN = 18
 
 
 def task_preprocess_experiments():
@@ -276,6 +280,81 @@ def task_generate_uncertainty_weights():
     }
 
 
+def task_synthesize_observer():
+    """Synthesize observer."""
+    dataset = WD.joinpath("build", "dataset.pickle")
+    models_linear = WD.joinpath("build", "models_linear.pickle")
+    uncertainty_linear = WD.joinpath("build", "uncertainty_linear_noload.pickle")
+    observer_linear = WD.joinpath("build", "observer_linear.pickle")
+    weight_plot_linear = WD.joinpath("build", "observer_weight_linear.png")
+    traj_plot_linear = WD.joinpath("build", "observer_traj_linear.png")
+    err_plot_linear = WD.joinpath("build", "observer_err_linear.png")
+    fft_plot_linear = WD.joinpath("build", "observer_fft_linear.png")
+    yield {
+        "name": "linear",
+        "actions": [
+            (
+                action_synthesize_observer,
+                (
+                    dataset,
+                    models_linear,
+                    uncertainty_linear,
+                    observer_linear,
+                    weight_plot_linear,
+                    traj_plot_linear,
+                    err_plot_linear,
+                    fft_plot_linear,
+                    "linear",
+                ),
+            )
+        ],
+        "file_dep": [dataset, models_linear, uncertainty_linear],
+        "targets": [
+            observer_linear,
+            weight_plot_linear,
+            traj_plot_linear,
+            err_plot_linear,
+            fft_plot_linear,
+        ],
+        "clean": True,
+    }
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    uncertainty_koopman = WD.joinpath("build", "uncertainty_koopman_noload.pickle")
+    observer_koopman = WD.joinpath("build", "observer_koopman.pickle")
+    weight_plot_koopman = WD.joinpath("build", "observer_weight_koopman.png")
+    traj_plot_koopman = WD.joinpath("build", "observer_traj_koopman.png")
+    err_plot_koopman = WD.joinpath("build", "observer_err_koopman.png")
+    fft_plot_koopman = WD.joinpath("build", "observer_fft_koopman.png")
+    yield {
+        "name": "koopman",
+        "actions": [
+            (
+                action_synthesize_observer,
+                (
+                    dataset,
+                    models_koopman,
+                    uncertainty_koopman,
+                    observer_koopman,
+                    weight_plot_koopman,
+                    traj_plot_koopman,
+                    err_plot_koopman,
+                    fft_plot_koopman,
+                    "koopman",
+                ),
+            )
+        ],
+        "file_dep": [dataset, models_koopman, uncertainty_koopman],
+        "targets": [
+            observer_koopman,
+            weight_plot_koopman,
+            traj_plot_koopman,
+            err_plot_koopman,
+            fft_plot_koopman,
+        ],
+        "clean": True,
+    }
+
+
 def action_preprocess_experiments(
     raw_dataset_path: pathlib.Path,
     preprocessed_dataset_path: pathlib.Path,
@@ -444,7 +523,6 @@ def action_id_models(
 ):
     """Identify linear and Koopman models."""
     dataset = joblib.load(dataset_path)
-    n_train = 18
     n_inputs = 2
     episode_feature = True
     t_step = dataset.attrs["t_step"]
@@ -461,7 +539,7 @@ def action_id_models(
                 "target_joint_vel",
             ]
         ]
-        X_train = X.loc[X["episode"] < n_train].to_numpy()
+        X_train = X.loc[X["episode"] < N_TRAIN].to_numpy()
         if koopman == "koopman":
             # Get optimal phase shift
             phase = joblib.load(phase_path)
@@ -708,6 +786,368 @@ def action_generate_uncertainty_weights(
     joblib.dump(data, uncertainty_path)
 
 
+def action_synthesize_observer(
+    dataset_path: pathlib.Path,
+    models_path: pathlib.Path,
+    uncertainty_path: pathlib.Path,
+    observer_path: pathlib.Path,
+    weight_plot_path: pathlib.Path,
+    traj_plot_path: pathlib.Path,
+    err_plot_path: pathlib.Path,
+    fft_plot_path: pathlib.Path,
+    koopman: str,
+):
+    """Synthesize observer."""
+    dataset = joblib.load(dataset_path)
+    models = joblib.load(models_path)
+    uncertainty = joblib.load(uncertainty_path)
+    t_step = models.attrs["t_step"]
+    nom_sn = uncertainty["nominal_serial_no"]
+    # Results dictionary
+    results = {}
+    # Generalized plant weights
+    if koopman == "koopman":
+        W_p = control.StateSpace([], [], [], np.diag([1, 1, 1, 0]), dt=t_step)
+    else:
+        W_p = control.StateSpace([], [], [], np.diag([1, 1, 1]), dt=t_step)
+    W_u = control.StateSpace([], [], [], np.diag([1, 1]), dt=t_step)
+    W_D = control.tf2ss(uncertainty["fit_bound"]).sample(t_step)
+    # Save weight magnitudes
+    f = np.logspace(-3, np.log10(0.5 / t_step), 1000)
+    omega = 2 * np.pi * f
+    mag_p = _max_sv(W_p, f, t_step)
+    mag_u = _max_sv(W_u, f, t_step)
+    mag_D = _max_sv(W_D, f, t_step)
+    results["f"] = f
+    results["omega"] = omega
+    results["mag_p"] = mag_p
+    results["mag_u"] = mag_u
+    results["mag_D"] = mag_D
+    # Plot weights
+    fig, ax = plt.subplots()
+    ax.semilogx(f, 20 * np.log10(mag_p), label=r"$W_\mathrm{p}$")
+    ax.semilogx(f, 20 * np.log10(mag_u), "--", label=r"$W_\mathrm{u}$")
+    ax.semilogx(f, 20 * np.log10(mag_D), label=r"$W_\Delta$")
+    # Get nominal model and Koopman pipeline
+    P_0_ = control.StateSpace(
+        *models.loc[
+            (models["serial_no"] == nom_sn) & (~models["load"]), "state_space"
+        ].item()
+    )
+    kp = models.loc[
+        (models["serial_no"] == nom_sn) & (~models["load"]), "koopman_pipeline"
+    ].item()
+    # Update ``C`` matrix
+    if koopman == "koopman":
+        P_0 = control.StateSpace(
+            P_0_.A,
+            P_0_.B,
+            np.array(
+                [
+                    [1, 0, 0, 0],
+                ]
+            ),
+            np.array([[0, 0]]),
+            P_0_.dt,
+        )
+    else:
+        P_0 = control.StateSpace(
+            P_0_.A,
+            P_0_.B,
+            np.array(
+                [
+                    [1, 0, 0],
+                ]
+            ),
+            np.array([[0, 0]]),
+            P_0_.dt,
+        )
+    # Set number of inputs and outputs for generalized plant
+    n_z2 = 2
+    n_w2 = 2
+    n_y = 1
+    n_u = 2
+    # Create generalized plant state-space matrices
+    F_A = np.block(
+        [
+            [
+                P_0.A,
+                np.zeros((P_0.nstates, P_0.nstates)),
+                np.zeros((P_0.nstates, W_p.nstates)),
+                P_0.B @ W_u.C,
+                P_0.B @ W_D.C,
+            ],
+            [
+                np.zeros((P_0.nstates, P_0.nstates)),
+                P_0.A,
+                np.zeros((P_0.nstates, W_p.nstates)),
+                P_0.B @ W_u.C,
+                np.zeros((P_0.nstates, W_D.nstates)),
+            ],
+            [
+                W_p.B,
+                -1 * W_p.B,
+                W_p.A,
+                np.zeros((W_p.nstates, W_u.nstates)),
+                np.zeros((W_p.nstates, W_D.nstates)),
+            ],
+            [
+                np.zeros((W_u.nstates, P_0.nstates)),
+                np.zeros((W_u.nstates, P_0.nstates)),
+                np.zeros((W_u.nstates, W_p.nstates)),
+                W_u.A,
+                np.zeros((W_u.nstates, W_D.nstates)),
+            ],
+            [
+                np.zeros((W_D.nstates, P_0.nstates)),
+                np.zeros((W_D.nstates, P_0.nstates)),
+                np.zeros((W_D.nstates, W_p.nstates)),
+                np.zeros((W_D.nstates, W_u.nstates)),
+                W_D.A,
+            ],
+        ]
+    )
+    F_B = np.block(
+        [
+            [
+                P_0.B @ W_u.D,
+                P_0.B @ W_D.D,
+                np.zeros((P_0.nstates, P_0.ninputs)),
+            ],
+            [
+                P_0.B @ W_u.D,
+                np.zeros((P_0.nstates, W_D.ninputs)),
+                P_0.B,
+            ],
+            [
+                np.zeros((W_p.nstates, W_u.ninputs)),
+                np.zeros((W_p.nstates, W_D.ninputs)),
+                np.zeros((W_p.nstates, P_0.ninputs)),
+            ],
+            [
+                W_u.B,
+                np.zeros((W_u.nstates, W_D.ninputs)),
+                np.zeros((W_u.nstates, P_0.ninputs)),
+            ],
+            [
+                np.zeros((W_D.nstates, W_u.ninputs)),
+                W_D.B,
+                np.zeros((W_D.nstates, P_0.ninputs)),
+            ],
+        ]
+    )
+    F_C = np.block(
+        [
+            [
+                W_p.D,
+                -1 * W_p.D,
+                W_p.C,
+                np.zeros((W_p.noutputs, W_u.nstates)),
+                np.zeros((W_p.noutputs, W_D.nstates)),
+            ],
+            [
+                np.zeros((W_D.noutputs, P_0.nstates)),
+                np.zeros((W_D.noutputs, P_0.nstates)),
+                np.zeros((W_D.noutputs, W_p.nstates)),
+                W_u.C,
+                W_D.C,
+            ],
+            [
+                P_0.C,
+                -1 * P_0.C,
+                np.zeros((P_0.noutputs, W_p.nstates)),
+                np.zeros((P_0.noutputs, W_u.nstates)),
+                np.zeros((P_0.noutputs, W_D.nstates)),
+            ],
+        ]
+    )
+    F_D = np.block(
+        [
+            [
+                np.zeros((W_p.noutputs, W_u.ninputs)),
+                np.zeros((W_p.noutputs, W_D.ninputs)),
+                np.zeros((W_p.noutputs, P_0.ninputs)),
+            ],
+            [
+                W_u.D,
+                W_D.D,
+                np.zeros((W_u.ninputs, P_0.ninputs)),
+            ],
+            [
+                np.zeros((P_0.noutputs, W_u.ninputs)),
+                np.zeros((P_0.noutputs, W_D.ninputs)),
+                np.zeros((P_0.noutputs, P_0.ninputs)),
+            ],
+        ]
+    )
+    F = control.StateSpace(F_A, F_B, F_C, F_D, t_step)
+    # Save magnitude responses of generalized plant and nominal plant
+    mag_F = _max_sv(F, f, t_step)
+    mag_P = _max_sv(P_0, f, t_step)
+    results["mag_P"] = mag_P
+    results["mag_F"] = mag_F
+    results["F"] = (F_A, F_B, F_C, F_D, t_step)
+    # Add magnitudes to plot and save it
+    ax.semilogx(f, 20 * np.log10(mag_F), label=r"$G$")
+    ax.semilogx(f, 20 * np.log10(mag_P), label=r"$P$")
+    ax.grid(ls="--")
+    ax.legend(loc="lower right")
+    weight_plot_path.parent.mkdir(exist_ok=True)
+    fig.savefig(weight_plot_path)
+    # Synthesize controller
+    K, info = obs_syn.mixed_H2_Hinf(F, n_z2, n_w2, n_y, n_u, initial_guess=None)
+    if K is None:
+        raise RuntimeError(
+            f"Could not find solution to mixed H2-Hinf problem: {info['status']}"
+        )
+    # Save synthesis results
+    results["K"] = (K.A, K.B, K.C, K.D, t_step)
+    results["synthesis_info"] = info
+    # Load dataset to test observer
+    dataset_sn_noload = dataset.loc[
+        (dataset["serial_no"] == nom_sn) & (~dataset["load"])
+    ]
+    X = dataset_sn_noload[
+        [
+            "episode",
+            "joint_pos",
+            "joint_vel",
+            "joint_trq",
+            "target_joint_pos",
+            "target_joint_vel",
+        ]
+    ]
+    X_valid_ = X.loc[X["episode"] >= N_TRAIN].to_numpy()
+    X_valid = pykoop.split_episodes(
+        X_valid_,
+        episode_feature=True,
+    )[0][1]
+    # Lift measurements (for linear model this will do nothing)
+    meas = kp.lift_state(X_valid[:, :3], episode_feature=False).T
+    inpt = X_valid[:, 3:5].T
+    t = np.arange(inpt.shape[1]) * t_step
+    # Form closed-loop system to check stability
+    A_cl = np.block(
+        [
+            [
+                P_0.A - P_0.B @ K.D @ P_0.C,
+                P_0.B @ K.C,
+            ],
+            [
+                -K.B @ P_0.C,
+                K.A,
+            ],
+        ]
+    )
+    evs = scipy.linalg.eigvals(A_cl)
+    violation = np.max(np.abs(evs)) - 1
+    if np.any(np.abs(evs) >= 1):
+        raise RuntimeError(f"Unstable closed-loop by {violation}.")
+    # Check stability with all off-nominal models
+    for i, model in models.groupby(by=["serial_no", "load"]):
+        A, B, _, _, _ = model["state_space"].item()
+        A_cl = np.block(
+            [
+                [
+                    A - B @ K.D @ P_0.C,
+                    B @ K.C,
+                ],
+                [
+                    -K.B @ P_0.C,
+                    K.A,
+                ],
+            ]
+        )
+        evs = scipy.linalg.eigvals(A_cl)
+        violation = np.max(np.abs(evs)) - 1
+        if np.any(np.abs(evs) >= 1):
+            raise RuntimeError(f"{i} unstable closed-loop by {violation}.")
+    # Simulate observer
+    X = np.zeros((P_0.nstates, t.shape[0]))
+    X[:, [0]] = kp.lift_state(np.zeros((1, 3)), episode_feature=False).T
+    Xc = np.zeros((K.nstates, t.shape[0]))
+    for k in range(1, t.shape[0] + 1):
+        # Compute error first since 0 has no D matrix
+        err = P_0.C @ meas[:, k - 1] - P_0.C @ X[:, k - 1]
+        # Compute control output
+        u = K.C @ Xc[:, k - 1] + K.D @ err
+        if k < X.shape[1]:
+            # Update plant with control input
+            if koopman == "linear":
+                X[:, k] = P_0.A @ X[:, k - 1] + P_0.B @ (inpt[:, k - 1] + u)
+            else:
+                Xt_ret = kp.retract_state(X[:, [k - 1]].T, episode_feature=False)
+                X_rl = kp.lift_state(Xt_ret, episode_feature=False).T.ravel()
+                X[:, k] = P_0.A @ X_rl + P_0.B @ (inpt[:, k - 1] + u)
+            # Update controller
+            Xc[:, k] = K.A @ Xc[:, k - 1] + K.B @ err
+    # Plot trajectories
+    fig, ax = plt.subplots(meas.shape[0] + inpt.shape[0], 1, sharex=True)
+    for i in range(meas.shape[0]):
+        ax[i].plot(meas[i, :], label="True")
+        ax[i].plot(X[i, :], "--", label="Estimate")
+    if koopman == "koopman":
+        ax[4].plot(inpt[0, :])
+        ax[5].plot(inpt[1, :])
+        ax[3].set_ylabel(r"$\sin{\theta}$")
+        ax[4].set_ylabel(r"$\theta$ ref. (rad)")
+        ax[5].set_ylabel(r"$\dot{\theta}$ ref.(rad/s)")
+        ax[5].set_xlabel(r"k")
+    else:
+        ax[3].plot(inpt[0, :])
+        ax[4].plot(inpt[1, :])
+        ax[3].set_ylabel(r"$\theta$ ref. (rad)")
+        ax[4].set_ylabel(r"$\dot{\theta}$ ref.(rad/s)")
+        ax[4].set_xlabel(r"k")
+    ax[0].legend(loc="lower right")
+    for a in ax.ravel():
+        a.grid(ls="--")
+    ax[0].set_ylabel(r"$\theta$ (rad)")
+    ax[1].set_ylabel(r"$\dot{\theta}$ (rad/s)")
+    ax[2].set_ylabel(r"$\tau$ (pct)")
+    fig.suptitle(f"{koopman} prediction")
+    traj_plot_path.parent.mkdir(exist_ok=True)
+    fig.savefig(traj_plot_path)
+    # Plot trajectory errors
+    fig, ax = plt.subplots(meas.shape[0], 1, sharex=True)
+    for i in range(meas.shape[0]):
+        ax[i].plot(meas[i, :] - X[i, :])
+    for a in ax.ravel():
+        a.grid(ls="--")
+    ax[0].set_ylabel(r"$\Delta\theta$ (rad)")
+    ax[1].set_ylabel(r"$\Delta\dot{\theta}$ (rad/s)")
+    ax[2].set_ylabel(r"$\Delta\tau$ (pct)")
+    if koopman == "koopman":
+        ax[3].set_ylabel(r"$\Delta\sin{\theta}$")
+        ax[3].set_xlabel(r"k")
+    else:
+        ax[2].set_xlabel(r"k")
+    fig.suptitle(f"{koopman} error")
+    err_plot_path.parent.mkdir(exist_ok=True)
+    fig.savefig(err_plot_path)
+    # Plot trajectory error FFTs
+    f = scipy.fft.rfftfreq(meas.shape[1], t_step)
+    fft_err = scipy.fft.rfft(meas - X, norm="forward")
+    fig, ax = plt.subplots(meas.shape[0], 1, sharex=True)
+    for i in range(meas.shape[0]):
+        ax[i].plot(f, np.abs(fft_err[i, :]))
+    for a in ax.ravel():
+        a.grid(ls="--")
+    ax[0].set_ylabel(r"$\Delta\theta$ (rad)")
+    ax[1].set_ylabel(r"$\Delta\dot{\theta}$ (rad/s)")
+    ax[2].set_ylabel(r"$\Delta\tau$ (pct)")
+    if koopman == "koopman":
+        ax[3].set_ylabel(r"$\Delta\sin{\theta}$")
+        ax[3].set_xlabel(r"$f$ (Hz)")
+    else:
+        ax[2].set_xlabel(r"$f$ (Hz)")
+    fft_plot_path.parent.mkdir(exist_ok=True)
+    fig.savefig(fft_plot_path)
+    # Save results
+    observer_path.parent.mkdir(exist_ok=True)
+    joblib.dump(results, observer_path)
+
+
 def _circular_mean(theta: np.ndarray) -> float:
     """Circular mean."""
     avg_sin = np.mean(np.sin(theta))
@@ -794,3 +1234,10 @@ def _combine(G):
             den.append(den_row)
     G_tf = control.TransferFunction(num, den, dt=G[0][0].dt)
     return G_tf
+
+
+def _max_sv(ss, f, t_step):
+    """Maximum singular value plot."""
+    tm = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
+    mag = np.array([scipy.linalg.svdvals(tm[k, :, :])[0] for k in range(tm.shape[0])])
+    return mag
