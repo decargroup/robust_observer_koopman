@@ -40,6 +40,12 @@ OKABE_ITO = {
 # LaTeX linewidth (inches)
 LW = 3.5
 
+# ``fig.savefig()`` settings
+SAVEFIG_KW = {
+    "bbox_inches": "tight",
+    "pad_inches": 0.05,
+}
+
 # Set gobal Matplotlib options
 plt.rc("lines", linewidth=1.5)
 plt.rc("axes", grid=True)
@@ -1253,8 +1259,7 @@ def action_plot_fft(
     error_fft_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         error_fft_path,
-        bbox_inches="tight",
-        pad_inches=0.05,
+        **SAVEFIG_KW,
     )
 
 
