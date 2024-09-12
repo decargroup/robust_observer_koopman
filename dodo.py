@@ -12,6 +12,7 @@ import numpy as np
 import pandas
 import pykoop
 import scipy.linalg
+from cmcrameri import cm as cmc
 from matplotlib import pyplot as plt
 
 import obs_syn
@@ -436,6 +437,41 @@ def task_plot_model_predictions():
         ],
         "file_dep": [dataset, models_linear, models_koopman],
         "targets": [pred_ref, pred_traj, pred_err, pred_fft],
+        "clean": True,
+    }
+
+
+def task_plot_model_tfs():
+    """Plot model transfer functions."""
+    dataset = WD.joinpath("build", "dataset.pickle")
+    models_linear = WD.joinpath("build", "models_linear.pickle")
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    tfs_msv_linear = WD.joinpath("figures", "model_tfs_msv_linear.pdf")
+    tfs_msv_koopman = WD.joinpath("figures", "model_tfs_msv_koopman.pdf")
+    tfs_mimo_linear = WD.joinpath("figures", "model_tfs_mimo_linear.pdf")
+    tfs_mimo_koopman = WD.joinpath("figures", "model_tfs_mimo_koopman.pdf")
+    return {
+        "actions": [
+            (
+                action_plot_model_tfs,
+                (
+                    dataset,
+                    models_linear,
+                    models_koopman,
+                    tfs_msv_linear,
+                    tfs_msv_koopman,
+                    tfs_mimo_linear,
+                    tfs_mimo_koopman,
+                ),
+            )
+        ],
+        "file_dep": [dataset, models_linear, models_koopman],
+        "targets": [
+            tfs_msv_linear,
+            tfs_msv_koopman,
+            tfs_mimo_linear,
+            tfs_mimo_koopman,
+        ],
         "clean": True,
     }
 
@@ -1561,6 +1597,144 @@ def action_plot_model_predictions(
     pred_fft_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         pred_fft_path,
+        **SAVEFIG_KW,
+    )
+
+
+def action_plot_model_tfs(
+    dataset_path: pathlib.Path,
+    models_linear_path: pathlib.Path,
+    models_koopman_path: pathlib.Path,
+    tfs_msv_linear_path: pathlib.Path,
+    tfs_msv_koopman_path: pathlib.Path,
+    tfs_mimo_linear_path: pathlib.Path,
+    tfs_mimo_koopman_path: pathlib.Path,
+):
+    """Plot model transfer functions."""
+    dataset = joblib.load(dataset_path)
+    models_linear = joblib.load(models_linear_path)
+    models_koopman = joblib.load(models_koopman_path)
+    t_step = dataset.attrs["t_step"]
+    f = np.logspace(-3, np.log10(0.5 / t_step), 1000)
+    color = cmc.batlowS(np.linspace(0, 1, models_linear.shape[0]))
+
+    fig, ax = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    for i, sn in enumerate(models_linear["serial_no"]):
+        ss_ = models_linear.loc[
+            (models_linear["serial_no"] == sn) & (~models_linear["load"]), "state_space"
+        ]
+        if len(ss_) > 0:
+            ss_ = ss_.item()
+        else:
+            continue
+        ss = control.StateSpace(*ss_)
+        G = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
+        mag = np.array([scipy.linalg.svdvals(G[k, :, :])[0] for k in range(G.shape[0])])
+        ax.semilogx(f, 20 * np.log10(mag), color=color[i], label=sn)
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$\bar{\sigma}\left({\bf G}(f)\right)$ (dB)")
+    ax.set_ylim(-10, 20)
+    tfs_msv_linear_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        tfs_msv_linear_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    for i, sn in enumerate(models_koopman["serial_no"]):
+        ss_ = models_koopman.loc[
+            (models_koopman["serial_no"] == sn) & (~models_koopman["load"]),
+            "state_space",
+        ]
+        if len(ss_) > 0:
+            ss_ = ss_.item()
+        else:
+            continue
+        ss = control.StateSpace(*ss_)
+        G = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
+        mag = np.array([scipy.linalg.svdvals(G[k, :, :])[0] for k in range(G.shape[0])])
+        ax.semilogx(f, 20 * np.log10(mag), color=color[i], label=sn)
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$\bar{\sigma}\left({\bf G}(f)\right)$ (dB)")
+    ax.set_ylim(-10, 20)
+    tfs_msv_koopman_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        tfs_msv_koopman_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        3,
+        2,
+        constrained_layout=True,
+        figsize=(2 * LW, 1.5 * LW),
+        sharex=True,
+        sharey=True,
+    )
+    for i, sn in enumerate(models_linear["serial_no"]):
+        ss_ = models_linear.loc[
+            (models_linear["serial_no"] == sn) & (~models_linear["load"]), "state_space"
+        ]
+        if len(ss_) > 0:
+            ss_ = ss_.item()
+        else:
+            continue
+        ss = control.StateSpace(*ss_)
+        mag, _, _ = ss.frequency_response(2 * np.pi * f)
+        for j in range(mag.shape[0]):
+            for k in range(mag.shape[1]):
+                ax[j, k].semilogx(
+                    f,
+                    20 * np.log10(mag[j, k, :]),
+                    color=color[i],
+                    label=sn,
+                )
+                ax[-1, k].set_xlabel(r"$f$ (Hz)")
+                ax[j, k].set_ylabel(rf"$|G_{{{j + 1}{k + 1}}}(f)|$ (dB)")
+    tfs_mimo_linear_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        tfs_mimo_linear_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        4,
+        2,
+        constrained_layout=True,
+        figsize=(2 * LW, 2 * LW),
+        sharex=True,
+        sharey=True,
+    )
+    for i, sn in enumerate(models_koopman["serial_no"]):
+        ss_ = models_koopman.loc[
+            (models_koopman["serial_no"] == sn) & (~models_koopman["load"]),
+            "state_space",
+        ]
+        if len(ss_) > 0:
+            ss_ = ss_.item()
+        else:
+            continue
+        ss = control.StateSpace(*ss_)
+        mag, _, _ = ss.frequency_response(2 * np.pi * f)
+        for j in range(mag.shape[0]):
+            for k in range(mag.shape[1]):
+                ax[j, k].semilogx(
+                    f,
+                    20 * np.log10(mag[j, k, :]),
+                    color=color[i],
+                    label=sn,
+                )
+                ax[-1, k].set_xlabel(r"$f$ (Hz)")
+                ax[j, k].set_ylabel(rf"$|G_{{{j + 1}{k + 1}}}(f)|$ (dB)")
+    tfs_mimo_koopman_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        tfs_mimo_koopman_path,
         **SAVEFIG_KW,
     )
 
