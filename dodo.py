@@ -410,6 +410,36 @@ def task_plot_fft():
     }
 
 
+def task_plot_model_predictions():
+    """Plot model predictions."""
+    dataset = WD.joinpath("build", "dataset.pickle")
+    models_linear = WD.joinpath("build", "models_linear.pickle")
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    pred_ref = WD.joinpath("figures", "model_predictions_ref.pdf")
+    pred_traj = WD.joinpath("figures", "model_predictions_traj.pdf")
+    pred_err = WD.joinpath("figures", "model_predictions_err.pdf")
+    pred_fft = WD.joinpath("figures", "model_predictions_fft.pdf")
+    return {
+        "actions": [
+            (
+                action_plot_model_predictions,
+                (
+                    dataset,
+                    models_linear,
+                    models_koopman,
+                    pred_ref,
+                    pred_traj,
+                    pred_err,
+                    pred_fft,
+                ),
+            )
+        ],
+        "file_dep": [dataset, models_linear, models_koopman],
+        "targets": [pred_ref, pred_traj, pred_err, pred_fft],
+        "clean": True,
+    }
+
+
 def action_preprocess_experiments(
     raw_dataset_path: pathlib.Path,
     preprocessed_dataset_path: pathlib.Path,
@@ -1263,6 +1293,278 @@ def action_plot_fft(
     )
 
 
+def action_plot_model_predictions(
+    dataset_path: pathlib.Path,
+    models_linear_path: pathlib.Path,
+    models_koopman_path: pathlib.Path,
+    pred_ref_path: pathlib.Path,
+    pred_traj_path: pathlib.Path,
+    pred_err_path: pathlib.Path,
+    pred_fft_path: pathlib.Path,
+):
+    """Plot model predictions."""
+    dataset = joblib.load(dataset_path)
+    models_linear = joblib.load(models_linear_path)
+    models_koopman = joblib.load(models_koopman_path)
+
+    sn = "009017"
+    t_step = dataset.attrs["t_step"]
+
+    dataset_sn_noload = dataset.loc[(dataset["serial_no"] == sn) & (~dataset["load"])]
+    X = dataset_sn_noload[
+        [
+            "episode",
+            "joint_pos",
+            "joint_vel",
+            "joint_trq",
+            "target_joint_pos",
+            "target_joint_vel",
+        ]
+    ]
+    X_test = X.loc[X["episode"] == N_TRAIN].to_numpy()
+    t = np.arange(X_test.shape[0]) * t_step
+    kp_linear = models_linear.loc[
+        (models_linear["serial_no"] == sn) & (~models_linear["load"]),
+        "koopman_pipeline",
+    ].item()
+    kp_koopman = models_koopman.loc[
+        (models_koopman["serial_no"] == sn) & (~models_koopman["load"]),
+        "koopman_pipeline",
+    ].item()
+    Xp_linear = kp_linear.predict_trajectory(X_test)
+    Xp_koopman = kp_koopman.predict_trajectory(X_test)
+
+    fig, ax = plt.subplots(
+        2,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(t, X_test[:, 4], color=OKABE_ITO["black"], label="Measured")
+    ax[1].plot(t, X_test[:, 5], color=OKABE_ITO["black"])
+    ax[0].set_ylabel(r"$\theta^\mathrm{r}(t)$ (rad)")
+    ax[1].set_ylabel(r"$\dot{\theta}^\mathrm{r}(t)$ (rad/s)")
+    ax[1].set_xlabel(r"$t$ (s)")
+    fig.align_ylabels()
+    pred_ref_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        pred_ref_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(t, X_test[:, 1], color=OKABE_ITO["black"], label="Measured")
+    ax[1].plot(t, X_test[:, 2], color=OKABE_ITO["black"])
+    ax[2].plot(t, X_test[:, 3], color=OKABE_ITO["black"])
+    ax[0].plot(t, Xp_koopman[:, 1], color=OKABE_ITO["blue"], label="Koopman")
+    ax[1].plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
+    ax[2].plot(t, Xp_koopman[:, 3], color=OKABE_ITO["blue"])
+    ax[0].plot(t, Xp_linear[:, 1], color=OKABE_ITO["vermillion"], label="Linear")
+    ax[1].plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
+    ax[2].plot(t, Xp_linear[:, 3], color=OKABE_ITO["vermillion"])
+    # Inset axis 1
+    axins1 = ax[1].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(1.5, 1.8),
+        ylim=(3.05, 3.20),
+    )
+    axins1.plot(t, X_test[:, 2], color=OKABE_ITO["black"])
+    axins1.plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
+    axins1.plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
+    ax[1].indicate_inset_zoom(axins1, edgecolor="black")
+    # Inset axis 2
+    axins2 = ax[2].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(1.5, 1.8),
+        ylim=(-0.05, 0.25),
+    )
+    axins2.plot(t, X_test[:, 3], color=OKABE_ITO["black"])
+    axins2.plot(t, Xp_koopman[:, 3], color=OKABE_ITO["blue"])
+    axins2.plot(t, Xp_linear[:, 3], color=OKABE_ITO["vermillion"])
+    ax[2].indicate_inset_zoom(axins2, edgecolor="black")
+    # Labels
+    ax[0].set_ylabel(r"$\theta(t)$ (rad)")
+    ax[1].set_ylabel(r"$\dot{\theta}(t)$ (rad/s)")
+    ax[2].set_ylabel(r"$i(t)$ (unitless)")
+    ax[2].set_xlabel(r"$t$ (s)")
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[2],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    pred_traj_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        pred_traj_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(
+        t,
+        _percent_error(X_test[:, 1], Xp_linear[:, 1]),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[1].plot(
+        t,
+        _percent_error(X_test[:, 2], Xp_linear[:, 2]),
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[2].plot(
+        t,
+        _percent_error(X_test[:, 3], Xp_linear[:, 3]),
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[0].plot(
+        t,
+        _percent_error(X_test[:, 1], Xp_koopman[:, 1]),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[1].plot(
+        t,
+        _percent_error(X_test[:, 2], Xp_koopman[:, 2]),
+        color=OKABE_ITO["blue"],
+    )
+    ax[2].plot(
+        t,
+        _percent_error(X_test[:, 3], Xp_koopman[:, 3]),
+        color=OKABE_ITO["blue"],
+    )
+    axins1 = ax[1].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(0, 0.5),
+        ylim=(-9.5, 9.5),
+    )
+    axins1.plot(
+        t, _percent_error(X_test[:, 2], Xp_linear[:, 2]), color=OKABE_ITO["vermillion"]
+    )
+    axins1.plot(
+        t, _percent_error(X_test[:, 2], Xp_koopman[:, 2]), color=OKABE_ITO["blue"]
+    )
+    ax[1].indicate_inset_zoom(axins1, edgecolor="black")
+    axins2 = ax[2].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(0, 0.5),
+        ylim=(-95, 95),
+    )
+    axins2.plot(
+        t, _percent_error(X_test[:, 3], Xp_linear[:, 3]), color=OKABE_ITO["vermillion"]
+    )
+    axins2.plot(
+        t, _percent_error(X_test[:, 3], Xp_koopman[:, 3]), color=OKABE_ITO["blue"]
+    )
+    ax[2].indicate_inset_zoom(axins2, edgecolor="black")
+    ax[1].set_yticks([-10, -5, 0, 5, 10])
+    ax[2].set_yticks([-100, -50, 0, 50, 100])
+    ax[0].set_ylabel(r"$\Delta\theta(t)$ (\%)")
+    ax[1].set_ylabel(r"$\Delta\dot{\theta}(t)$ (\%)")
+    ax[2].set_ylabel(r"$\Delta i(t)$ (\%)")
+    ax[2].set_xlabel(r"$t$ (s)")
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    pred_err_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        pred_err_path,
+        **SAVEFIG_KW,
+    )
+
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(
+        *_psd_error(X_test[:, 1], Xp_linear[:, 1], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[0].plot(
+        *_psd_error(X_test[:, 1], Xp_koopman[:, 1], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[1].plot(
+        *_psd_error(X_test[:, 2], Xp_linear[:, 2], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[1].plot(
+        *_psd_error(X_test[:, 2], Xp_koopman[:, 2], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[2].plot(
+        *_psd_error(X_test[:, 3], Xp_linear[:, 3], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[2].plot(
+        *_psd_error(X_test[:, 3], Xp_koopman[:, 3], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[2].set_xlabel(r"$f$ (Hz)")
+    ax[0].set_ylabel(
+        r"$S_{\theta^\mathrm{e}\theta^\mathrm{e}}(f)$ "
+        "\n"
+        r"($\mathrm{rad}^2/\mathrm{Hz}$)"
+    )
+    ax[1].set_ylabel(
+        r"$S_{\dot{\theta}^\mathrm{e}\dot{\theta}^\mathrm{e}}(f)$ "
+        "\n"
+        r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
+    )
+    ax[2].set_ylabel(r"$S_{i^\mathrm{e}i^\mathrm{e}}(f)$" "\n" r"($1/\mathrm{Hz}$)")
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    pred_fft_path.parent.mkdir(exist_ok=True)
+    fig.savefig(
+        pred_fft_path,
+        **SAVEFIG_KW,
+    )
+
+
 def _circular_mean(theta: np.ndarray) -> float:
     """Circular mean."""
     avg_sin = np.mean(np.sin(theta))
@@ -1356,3 +1658,36 @@ def _max_sv(ss, f, t_step):
     tm = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
     mag = np.array([scipy.linalg.svdvals(tm[k, :, :])[0] for k in range(tm.shape[0])])
     return mag
+
+
+def _percent_error(reference: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+    """Calculate percent error from reference and predicted trajectories.
+
+    Normalized using maximum amplitude of reference trajectory.
+
+    Parameters
+    ----------
+    reference : np.ndarray
+        Reference trajectory, witout episode feature.
+    predicted : np.ndarray
+        Predicted trajectory, witout episode feature.
+
+    Returns
+    -------
+    np.ndarray
+        Percent error.
+    """
+    ampl = np.max(np.abs(reference))
+    percent_error = (reference - predicted) / ampl * 100
+    return percent_error
+
+
+def _psd_error(reference, predicted, t_step):
+    """Calculate error PSD."""
+    err = reference - predicted
+    f, err_spec = scipy.signal.welch(
+        err,
+        fs=(1 / t_step),
+        nperseg=512,
+    )
+    return f, err_spec
