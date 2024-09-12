@@ -1534,6 +1534,253 @@ def action_plot_phase(
     )
 
 
+def action_plot_uncertainty(
+    residuals_path: pathlib.Path,
+    uncertainty_path: pathlib.Path,
+    nominal_path: pathlib.Path,
+    koopman: str,
+):
+    """Plot uncertainty."""
+    figures_path = residuals_path.parent.parent.joinpath("figures")
+    figures_path.mkdir(exist_ok=True, parents=True)
+    residuals = joblib.load(residuals_path)
+    uncertainty = joblib.load(uncertainty_path)
+    f = residuals.attrs["f"]
+    omega = 2 * np.pi * f
+
+    color = {
+        "additive": OKABE_ITO["orange"],
+        "inverse_additive": OKABE_ITO["vermillion"],
+        "input_multiplicative": OKABE_ITO["sky blue"],
+        "inverse_input_multiplicative": OKABE_ITO["blue"],
+        "output_multiplicative": OKABE_ITO["bluish green"],
+        "inverse_output_multiplicative": OKABE_ITO["reddish purple"],
+    }
+    label = {
+        "additive": "Additive",
+        "inverse_additive": "Inv. additive",
+        "input_multiplicative": "Input mult.",
+        "inverse_input_multiplicative": "Inv. input mult.",
+        "output_multiplicative": "Output mult.",
+        "inverse_output_multiplicative": "Inv. output mult.",
+    }
+
+    # Plot the MIMO residuals for each uncertainty form, along with a plot
+    # showing the maximum singular value of the residual for each uncertainty
+    # form together.
+    #
+    # Note, here the nominal model is different for each uncertainty type and
+    # each identification method. Later, the nominal will be fixed to allow for
+    # fair comparison.
+    fig_all, ax_all = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    for res_name, res in residuals.groupby(by="uncertainty_form"):
+        res_noload = res.loc[~res["load"]]
+        min_area = res_noload.loc[res_noload["peak_bound"].idxmin()]
+        all = np.stack(np.abs(min_area["residuals"]))
+        bound = np.max(all, axis=0)
+        fig, ax = plt.subplots(
+            bound.shape[0],
+            bound.shape[1],
+            constrained_layout=True,
+            figsize=(LW * bound.shape[1] / 2, LW * bound.shape[0] / 2),
+            sharex=True,
+        )
+        for i in range(ax.shape[0]):
+            for j in range(ax.shape[1]):
+                for residual in min_area["residuals"]:
+                    magnitude = 20 * np.log10(np.abs(residual))
+                    ax[i, j].semilogx(
+                        f,
+                        magnitude[i, j, :],
+                        ls=":",
+                        lw=1,
+                        color=OKABE_ITO["grey"],
+                        label="Residual",
+                    )
+                ax[i, j].semilogx(
+                    f,
+                    20 * np.log10(bound[i, j, :]),
+                    color=color[res_name],
+                    label=r"Res. bound",
+                )
+                ax[i, j].set_ylabel(rf"$|W_{{\!\Delta,{i + 1}{j + 1}}}(f)|$ (dB)")
+                ax[-1, j].set_xlabel(r"$f$ (Hz)")
+        fig.legend(
+            handles=[
+                ax[0, 0].get_lines()[0],
+                ax[0, 0].get_lines()[-1],
+            ],
+            loc="upper center",
+            ncol=2,
+            handlelength=1,
+            bbox_to_anchor=(0.5, 0.01),
+        )
+        fig.savefig(
+            figures_path.joinpath(f"uncertainty_{koopman}_{res_name}.pdf"),
+            **SAVEFIG_KW,
+        )
+        max_sv = min_area["bound"]
+        ax_all.semilogx(
+            f,
+            20 * np.log10(max_sv),
+            label=label[res_name],
+            color=color[res_name],
+        )
+    ax_all.set_ylabel(r"$\bar{\sigma}({\bf W}_{\!\Delta}(f))$ (dB)")
+    ax_all.set_xlabel(r"$f$ (Hz)")
+    ax_all.set_ylim([-70, 20])
+    fig_all.legend(
+        handles=[
+            ax_all.get_lines()[0],
+            ax_all.get_lines()[2],
+            ax_all.get_lines()[1],
+            ax_all.get_lines()[3],
+            ax_all.get_lines()[5],
+            ax_all.get_lines()[4],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    fig_all.savefig(
+        figures_path.joinpath(f"uncertainty_{koopman}.pdf"),
+        **SAVEFIG_KW,
+    )
+
+    # Plot maximum singular value of residuals along with fit bound
+    uncertainty_form = "inverse_input_multiplicative"
+    nominal_sn = nominal_path.read_text()
+    if koopman == "koopman":
+        nominal_sn_calc = residuals.loc[
+            residuals["peak_bound"].idxmin(),
+            "nominal_serial_no",
+        ]
+        if nominal_sn_calc != nominal_sn:
+            raise RuntimeError(
+                "Optimal nominal serial number does not match saved one."
+            )
+    fig_all, ax_all = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    min_area = residuals.loc[
+        (residuals["uncertainty_form"] == uncertainty_form)
+        & (residuals["nominal_serial_no"] == nominal_sn)
+        & (~residuals["load"])
+    ]
+    max_sv = min_area["bound"].item()
+    fit_bound = uncertainty["fit_bound"]
+    max_sv_fit = np.array([scipy.linalg.svdvals(fit_bound(1j * w))[0] for w in omega])
+    for residual in min_area["residuals"].item():
+        res_mag = np.array(
+            [
+                scipy.linalg.svdvals(residual[:, :, i])[0]
+                for i in range(residual.shape[2])
+            ]
+        )
+        ax_all.semilogx(
+            f,
+            20 * np.log10(res_mag),
+            lw=1,
+            ls=":",
+            color=OKABE_ITO["grey"],
+            label="Residual",
+        )
+    ax_all.semilogx(
+        f,
+        20 * np.log10(max_sv),
+        label=r"Res.\ bound",
+        color=OKABE_ITO["black"],
+    )
+    ax_all.semilogx(
+        f,
+        20 * np.log10(max_sv_fit),
+        label=r"Fit res.\ bound",
+        color=color[uncertainty_form],
+    )
+    ax_all.set_ylabel(r"$\bar{\sigma}({\bf W}_{\!\Delta}(f))$ (dB)")
+    ax_all.set_xlabel(r"$f$ (Hz)")
+    ax_all.set_ylim(-100, 0)
+    fig_all.legend(
+        handles=[
+            ax_all.get_lines()[0],
+            ax_all.get_lines()[-2],
+            ax_all.get_lines()[-1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    fig_all.savefig(
+        figures_path.joinpath(f"uncertainty_bound_msv_{koopman}.pdf"),
+        **SAVEFIG_KW,
+    )
+
+    # Plot MIMO residuals and fit bounds
+    min_area = residuals.loc[
+        (residuals["uncertainty_form"] == uncertainty_form)
+        & (residuals["nominal_serial_no"] == nominal_sn)
+        & (~residuals["load"])
+    ]
+    all = np.stack(np.abs(min_area["residuals"].item()))
+    bound = np.max(all, axis=0)
+    fig, ax = plt.subplots(
+        bound.shape[0],
+        bound.shape[1],
+        constrained_layout=True,
+        figsize=(LW * bound.shape[1] / 2, LW * bound.shape[0] / 2),
+        sharex=True,
+    )
+    for i in range(ax.shape[0]):
+        for j in range(ax.shape[1]):
+            for residual in min_area["residuals"].item():
+                magnitude = 20 * np.log10(np.abs(residual))
+                ax[i, j].semilogx(
+                    f,
+                    magnitude[i, j, :],
+                    ls=":",
+                    lw=1,
+                    color=OKABE_ITO["grey"],
+                    label="Residual",
+                )
+            ax[i, j].semilogx(
+                f,
+                20 * np.log10(bound[i, j, :]),
+                color=OKABE_ITO["black"],
+                label=r"Res.\ bound",
+            )
+            fit_bound = uncertainty["fit_bound"]
+            mag, _, _ = fit_bound.frequency_response(omega)
+            ax[i, j].semilogx(
+                f,
+                20 * np.log10(mag[i, j, :]),
+                color=color[uncertainty_form],
+                label=r"Fit res.\ bound",
+            )
+            ax[i, j].set_ylabel(rf"$|W_{{\!\Delta,{i + 1}{j + 1}}}(f)|$ (dB)")
+            ax[-1, j].set_xlabel(r"$f$ (Hz)")
+    fig.legend(
+        handles=[
+            ax[0, 0].get_lines()[0],
+            ax[0, 0].get_lines()[-2],
+            ax[0, 0].get_lines()[-1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    fig.savefig(
+        figures_path.joinpath(f"uncertainty_bound_mimo_{koopman}.pdf"),
+        **SAVEFIG_KW,
+    )
+
+
 def _circular_mean(theta: np.ndarray) -> float:
     """Circular mean."""
     avg_sin = np.mean(np.sin(theta))

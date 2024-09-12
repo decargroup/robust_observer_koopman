@@ -521,3 +521,70 @@ def task_plot_phase():
         "targets": [phase_plot_path, phase_txt_path],
         "clean": True,
     }
+
+
+def task_plot_uncertainty():
+    """Plot uncertainty."""
+    # Koopman action
+    residuals_koopman_path = WD.joinpath("build", "residuals_koopman.pickle")
+    uncertainty_koopman_path = WD.joinpath("build", "uncertainty_koopman_noload.pickle")
+    nominal_path = WD.joinpath("build", "nominal_noload.txt")
+    targets_koopman = [
+        "uncertainty_bound_mimo_koopman.pdf",
+        "uncertainty_bound_msv_koopman.pdf",
+        "uncertainty_koopman_additive.pdf",
+        "uncertainty_koopman_input_multiplicative.pdf",
+        "uncertainty_koopman_inverse_additive.pdf",
+        "uncertainty_koopman_inverse_input_multiplicative.pdf",
+        "uncertainty_koopman_inverse_output_multiplicative.pdf",
+        "uncertainty_koopman_output_multiplicative.pdf",
+        "uncertainty_koopman.pdf",
+    ]
+    yield {
+        "name": "koopman",
+        "actions": [
+            (
+                actions.action_plot_uncertainty,
+                (
+                    residuals_koopman_path,
+                    uncertainty_koopman_path,
+                    nominal_path,
+                    "koopman",
+                ),
+            )
+        ],
+        "file_dep": [residuals_koopman_path, uncertainty_koopman_path],
+        "targets": [WD.joinpath("figures", t) for t in targets_koopman],
+        "clean": True,
+    }
+    # Linear action
+    residuals_linear_path = WD.joinpath("build", "residuals_linear.pickle")
+    uncertainty_linear_path = WD.joinpath("build", "uncertainty_linear_noload.pickle")
+    targets_linear = [
+        "uncertainty_bound_mimo_linear.pdf",
+        "uncertainty_bound_msv_linear.pdf",
+        "uncertainty_linear_additive.pdf",
+        "uncertainty_linear_input_multiplicative.pdf",
+        "uncertainty_linear_inverse_additive.pdf",
+        "uncertainty_linear_inverse_input_multiplicative.pdf",
+        "uncertainty_linear_inverse_output_multiplicative.pdf",
+        "uncertainty_linear_output_multiplicative.pdf",
+        "uncertainty_linear.pdf",
+    ]
+    yield {
+        "name": "linear",
+        "actions": [
+            (
+                actions.action_plot_uncertainty,
+                (
+                    residuals_linear_path,
+                    uncertainty_linear_path,
+                    nominal_path,
+                    "linear",
+                ),
+            )
+        ],
+        "file_dep": [residuals_linear_path, uncertainty_linear_path],
+        "targets": [WD.joinpath("figures", t) for t in targets_linear],
+        "clean": True,
+    }
