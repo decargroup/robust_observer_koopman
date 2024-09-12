@@ -476,11 +476,86 @@ def task_plot_model_tfs():
     }
 
 
+def task_plot_observer():
+    """Plot observer."""
+    dataset = WD.joinpath("build/dataset.pickle")
+    uncertainty_linear = WD.joinpath("build", "uncertainty_linear_noload.pickle")
+    uncertainty_koopman = WD.joinpath("build", "uncertainty_koopman_noload.pickle")
+    models_linear = WD.joinpath("build", "models_linear.pickle")
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    observer_linear = WD.joinpath("build", "observer_linear.pickle")
+    observer_koopman = WD.joinpath("build", "observer_koopman.pickle")
+    obs_weights_linear = WD.joinpath("figures", "observer_weights_linear.pdf")
+    obs_weights_koopman = WD.joinpath("figures", "observer_weights_koopman.pdf")
+    obs_nom_noload_traj = WD.joinpath("figures", "observer_nominal_noload_traj.pdf")
+    obs_nom_noload_err = WD.joinpath("figures", "observer_nominal_noload_err.pdf")
+    obs_nom_noload_psd = WD.joinpath("figures", "observer_nominal_noload_psd.pdf")
+    obs_nom_load_traj = WD.joinpath("figures", "observer_nominal_load_traj.pdf")
+    obs_nom_load_err = WD.joinpath("figures", "observer_nominal_load_err.pdf")
+    obs_nom_load_psd = WD.joinpath("figures", "observer_nominal_load_psd.pdf")
+    obs_offnom_noload_traj = WD.joinpath(
+        "figures", "observer_offnominal_noload_traj.pdf"
+    )
+    obs_offnom_noload_err = WD.joinpath("figures", "observer_offnominal_noload_err.pdf")
+    obs_offnom_noload_psd = WD.joinpath("figures", "observer_offnominal_noload_psd.pdf")
+    return {
+        "actions": [
+            (
+                action_plot_observer,
+                (
+                    dataset,
+                    uncertainty_linear,
+                    uncertainty_koopman,
+                    models_linear,
+                    models_koopman,
+                    observer_linear,
+                    observer_koopman,
+                    obs_weights_linear,
+                    obs_weights_koopman,
+                    obs_nom_noload_traj,
+                    obs_nom_noload_err,
+                    obs_nom_noload_psd,
+                    obs_nom_load_traj,
+                    obs_nom_load_err,
+                    obs_nom_load_psd,
+                    obs_offnom_noload_traj,
+                    obs_offnom_noload_err,
+                    obs_offnom_noload_psd,
+                ),
+            )
+        ],
+        "file_dep": [
+            dataset,
+            uncertainty_linear,
+            uncertainty_koopman,
+            models_linear,
+            models_koopman,
+            observer_linear,
+            observer_koopman,
+        ],
+        "targets": [
+            obs_weights_linear,
+            obs_weights_koopman,
+            obs_nom_noload_traj,
+            obs_nom_noload_err,
+            obs_nom_noload_psd,
+            obs_nom_load_traj,
+            obs_nom_load_err,
+            obs_nom_load_psd,
+            obs_offnom_noload_traj,
+            obs_offnom_noload_err,
+            obs_offnom_noload_psd,
+        ],
+        "clean": True,
+    }
+
+
 def action_preprocess_experiments(
     raw_dataset_path: pathlib.Path,
     preprocessed_dataset_path: pathlib.Path,
 ):
     """Preprocess raw data into pickle containing Pandas ``DataFrame``."""
+    preprocessed_dataset_path.parent.mkdir(parents=True, exist_ok=True)
     preprocessed_dataset = WD.joinpath("build/dataset.pickle")
     gear_ratio = 1 / 100
     rad_per_deg = 2 * np.pi / 360
@@ -550,7 +625,6 @@ def action_preprocess_experiments(
         by=["serial_no", "load", "episode", "k"],
         inplace=True,
     )
-    preprocessed_dataset.parent.mkdir(exist_ok=True)
     joblib.dump(merged_df, preprocessed_dataset)
 
 
@@ -559,6 +633,7 @@ def action_compute_phase(
     phase_path: pathlib.Path,
 ):
     """Compute phase offset."""
+    phase_path.parent.mkdir(parents=True, exist_ok=True)
     # Load dataset
     dataset = joblib.load(dataset_path)
     # Settings
@@ -632,7 +707,6 @@ def action_compute_phase(
         by=["serial_no", "load", "episode"],
         inplace=True,
     )
-    phase_path.parent.mkdir(exist_ok=True)
     joblib.dump(df, phase_path)
 
 
@@ -643,6 +717,7 @@ def action_id_models(
     koopman: str,
 ):
     """Identify linear and Koopman models."""
+    models_path.parent.mkdir(parents=True, exist_ok=True)
     dataset = joblib.load(dataset_path)
     n_inputs = 2
     episode_feature = True
@@ -711,7 +786,6 @@ def action_id_models(
         inplace=True,
     )
     df.attrs["t_step"] = t_step
-    models_path.parent.mkdir(exist_ok=True)
     joblib.dump(df, models_path)
 
 
@@ -720,6 +794,7 @@ def action_compute_residuals(
     residuals_path: pathlib.Path,
 ):
     """Compute residuals from linear and Koopman models."""
+    residuals_path.parent.mkdir(parents=True, exist_ok=True)
     models = joblib.load(models_path)
     t_step = models.attrs["t_step"]
     uncertainty_forms = [
@@ -817,7 +892,6 @@ def action_compute_residuals(
     )
     df.attrs["t_step"] = t_step
     df.attrs["f"] = f
-    residuals_path.parent.mkdir(exist_ok=True)
     joblib.dump(df, residuals_path)
 
 
@@ -832,6 +906,7 @@ def action_generate_uncertainty_weights(
     load: str,
 ):
     """Generate uncertainty weights models."""
+    uncertainty_path.parent.mkdir(parents=True, exist_ok=True)
     residuals = joblib.load(residuals_path)
     t_step = residuals.attrs["t_step"]
     f = residuals.attrs["f"]
@@ -876,7 +951,6 @@ def action_generate_uncertainty_weights(
     fig.suptitle(f"{koopman} uncertainty bounds, {load}")
     for a in ax.ravel():
         a.grid(ls="--")
-    uncertainty_mimo_path.parent.mkdir(exist_ok=True)
     fig.savefig(uncertainty_mimo_path)
 
     max_sv = min_area["bound"]
@@ -888,12 +962,10 @@ def action_generate_uncertainty_weights(
     ax.set_xlabel(r"$f$ (Hz)")
     ax.set_ylabel(r"$\bar{\sigma}(W(f))$ (dB)")
     ax.set_title(f"{koopman} uncertainty bound, {load}")
-    uncertainty_msv_path.parent.mkdir(exist_ok=True)
     fig.savefig(uncertainty_msv_path)
 
     nominal_serial_no = min_area["nominal_serial_no"]
     if koopman == "koopman":
-        nominal_path.parent.mkdir(exist_ok=True)
         # joblib.dump(nominal_serial_no, nominal_path)
         nominal_path.write_text(nominal_serial_no)
 
@@ -903,7 +975,6 @@ def action_generate_uncertainty_weights(
         "fit_bound": fit_bound,
         "t_step": t_step,
     }
-    uncertainty_path.parent.mkdir(exist_ok=True)
     joblib.dump(data, uncertainty_path)
 
 
@@ -919,6 +990,7 @@ def action_synthesize_observer(
     koopman: str,
 ):
     """Synthesize observer."""
+    observer_path.parent.mkdir(parents=True, exist_ok=True)
     dataset = joblib.load(dataset_path)
     models = joblib.load(models_path)
     uncertainty = joblib.load(uncertainty_path)
@@ -1113,7 +1185,6 @@ def action_synthesize_observer(
     ax.semilogx(f, 20 * np.log10(mag_P), label=r"$P$")
     ax.grid(ls="--")
     ax.legend(loc="lower right")
-    weight_plot_path.parent.mkdir(exist_ok=True)
     fig.savefig(weight_plot_path)
     # Synthesize controller
     K, info = obs_syn.mixed_H2_Hinf(F, n_z2, n_w2, n_y, n_u, initial_guess=None)
@@ -1123,6 +1194,7 @@ def action_synthesize_observer(
         )
     # Save synthesis results
     results["K"] = (K.A, K.B, K.C, K.D, t_step)
+    results["P"] = (P_0.A, P_0.B, P_0.C, P_0.D, t_step)
     results["synthesis_info"] = info
     # Load dataset to test observer
     dataset_sn_noload = dataset.loc[
@@ -1227,7 +1299,6 @@ def action_synthesize_observer(
     ax[1].set_ylabel(r"$\dot{\theta}$ (rad/s)")
     ax[2].set_ylabel(r"$\tau$ (pct)")
     fig.suptitle(f"{koopman} prediction")
-    traj_plot_path.parent.mkdir(exist_ok=True)
     fig.savefig(traj_plot_path)
     # Plot trajectory errors
     fig, ax = plt.subplots(meas.shape[0], 1, sharex=True)
@@ -1244,7 +1315,6 @@ def action_synthesize_observer(
     else:
         ax[2].set_xlabel(r"k")
     fig.suptitle(f"{koopman} error")
-    err_plot_path.parent.mkdir(exist_ok=True)
     fig.savefig(err_plot_path)
     # Plot trajectory error FFTs
     f = scipy.fft.rfftfreq(meas.shape[1], t_step)
@@ -1262,10 +1332,8 @@ def action_synthesize_observer(
         ax[3].set_xlabel(r"$f$ (Hz)")
     else:
         ax[2].set_xlabel(r"$f$ (Hz)")
-    fft_plot_path.parent.mkdir(exist_ok=True)
     fig.savefig(fft_plot_path)
     # Save results
-    observer_path.parent.mkdir(exist_ok=True)
     joblib.dump(results, observer_path)
 
 
@@ -1274,6 +1342,7 @@ def action_plot_fft(
     error_fft_path: pathlib.Path,
 ):
     """Plot error FFT."""
+    error_fft_path.parent.mkdir(parents=True, exist_ok=True)
     dataset = joblib.load(dataset_path)
     # Settings
     t_step = dataset.attrs["t_step"]
@@ -1322,7 +1391,6 @@ def action_plot_fft(
                     r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
                 )
                 break
-    error_fft_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         error_fft_path,
         **SAVEFIG_KW,
@@ -1339,6 +1407,7 @@ def action_plot_model_predictions(
     pred_fft_path: pathlib.Path,
 ):
     """Plot model predictions."""
+    pred_ref_path.parent.mkdir(parents=True, exist_ok=True)
     dataset = joblib.load(dataset_path)
     models_linear = joblib.load(models_linear_path)
     models_koopman = joblib.load(models_koopman_path)
@@ -1383,7 +1452,6 @@ def action_plot_model_predictions(
     ax[1].set_ylabel(r"$\dot{\theta}^\mathrm{r}(t)$ (rad/s)")
     ax[1].set_xlabel(r"$t$ (s)")
     fig.align_ylabels()
-    pred_ref_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         pred_ref_path,
         **SAVEFIG_KW,
@@ -1442,7 +1510,6 @@ def action_plot_model_predictions(
         handlelength=1,
         bbox_to_anchor=(0.5, 0.01),
     )
-    pred_traj_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         pred_traj_path,
         **SAVEFIG_KW,
@@ -1528,7 +1595,6 @@ def action_plot_model_predictions(
         handlelength=1,
         bbox_to_anchor=(0.5, 0.01),
     )
-    pred_err_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         pred_err_path,
         **SAVEFIG_KW,
@@ -1594,7 +1660,6 @@ def action_plot_model_predictions(
         handlelength=1,
         bbox_to_anchor=(0.5, 0.01),
     )
-    pred_fft_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         pred_fft_path,
         **SAVEFIG_KW,
@@ -1611,6 +1676,7 @@ def action_plot_model_tfs(
     tfs_mimo_koopman_path: pathlib.Path,
 ):
     """Plot model transfer functions."""
+    tfs_msv_linear_path.parent.mkdir(parents=True, exist_ok=True)
     dataset = joblib.load(dataset_path)
     models_linear = joblib.load(models_linear_path)
     models_koopman = joblib.load(models_koopman_path)
@@ -1637,7 +1703,6 @@ def action_plot_model_tfs(
     ax.set_xlabel(r"$f$ (Hz)")
     ax.set_ylabel(r"$\bar{\sigma}\left({\bf G}(f)\right)$ (dB)")
     ax.set_ylim(-10, 20)
-    tfs_msv_linear_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         tfs_msv_linear_path,
         **SAVEFIG_KW,
@@ -1663,7 +1728,6 @@ def action_plot_model_tfs(
     ax.set_xlabel(r"$f$ (Hz)")
     ax.set_ylabel(r"$\bar{\sigma}\left({\bf G}(f)\right)$ (dB)")
     ax.set_ylim(-10, 20)
-    tfs_msv_koopman_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         tfs_msv_koopman_path,
         **SAVEFIG_KW,
@@ -1697,7 +1761,6 @@ def action_plot_model_tfs(
                 )
                 ax[-1, k].set_xlabel(r"$f$ (Hz)")
                 ax[j, k].set_ylabel(rf"$|G_{{{j + 1}{k + 1}}}(f)|$ (dB)")
-    tfs_mimo_linear_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         tfs_mimo_linear_path,
         **SAVEFIG_KW,
@@ -1732,9 +1795,211 @@ def action_plot_model_tfs(
                 )
                 ax[-1, k].set_xlabel(r"$f$ (Hz)")
                 ax[j, k].set_ylabel(rf"$|G_{{{j + 1}{k + 1}}}(f)|$ (dB)")
-    tfs_mimo_koopman_path.parent.mkdir(exist_ok=True)
     fig.savefig(
         tfs_mimo_koopman_path,
+        **SAVEFIG_KW,
+    )
+
+
+def action_plot_observer(
+    dataset_path: pathlib.Path,
+    uncertainty_linear_path: pathlib.Path,
+    uncertainty_koopman_path: pathlib.Path,
+    models_linear_path: pathlib.Path,
+    models_koopman_path: pathlib.Path,
+    observer_linear_path: pathlib.Path,
+    observer_koopman_path: pathlib.Path,
+    obs_weights_linear_path: pathlib.Path,
+    obs_weights_koopman_path: pathlib.Path,
+    obs_nom_noload_traj_path: pathlib.Path,
+    obs_nom_noload_err_path: pathlib.Path,
+    obs_nom_noload_psd_path: pathlib.Path,
+    obs_nom_load_traj_path: pathlib.Path,
+    obs_nom_load_err_path: pathlib.Path,
+    obs_nom_load_psd_path: pathlib.Path,
+    obs_offnom_noload_traj_path: pathlib.Path,
+    obs_offnom_noload_err_path: pathlib.Path,
+    obs_offnom_noload_psd_path: pathlib.Path,
+):
+    """Plot observer."""
+    obs_weights_linear_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset = joblib.load(dataset_path)
+    uncertainty_linear = joblib.load(uncertainty_linear_path)
+    # Currently unused but may be used later
+    # uncertainty_koopman = joblib.load(uncertainty_koopman_path)
+    # models_linear = joblib.load(models_linear_path)
+    models_koopman = joblib.load(models_koopman_path)
+    observer_linear = joblib.load(observer_linear_path)
+    observer_koopman = joblib.load(observer_koopman_path)
+    t_step = dataset.attrs["t_step"]
+
+    # Plot weights for linear and Koopman observers
+    fig, ax = _plot_weights(observer_linear)
+    fig.savefig(
+        obs_weights_linear_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_weights(observer_koopman)
+    fig.savefig(
+        obs_weights_koopman_path,
+        **SAVEFIG_KW,
+    )
+
+    # Nominal, no load
+    nom_sn = uncertainty_linear["nominal_serial_no"]
+    X_valid_noload = dataset.loc[
+        (dataset["serial_no"] == nom_sn)
+        & (dataset["episode"] == N_TRAIN)
+        & (~dataset["load"]),
+        [
+            "joint_pos",
+            "joint_vel",
+            "joint_trq",
+            "target_joint_pos",
+            "target_joint_vel",
+        ],
+    ].to_numpy()
+    t = np.arange(X_valid_noload.shape[0]) * t_step
+    # x0 = np.array([[0.1], [-1], [0.25]])
+    x0 = np.array([[0], [0], [0]])
+    X_obs_linear_noload = _simulate_linear(
+        control.StateSpace(*observer_linear["P"]),
+        control.StateSpace(*observer_linear["K"]),
+        X_valid_noload,
+        x0=x0,
+    )
+    kp = models_koopman.loc[
+        (models_koopman["serial_no"] == nom_sn) & (~models_koopman["load"]),
+        "koopman_pipeline",
+    ].item()
+    X_obs_koopman_noload = _simulate_koopman(
+        control.StateSpace(*observer_koopman["P"]),
+        control.StateSpace(*observer_koopman["K"]),
+        X_valid_noload,
+        kp,
+        x0=x0,
+    )
+    fig, ax = _plot_traj(t, X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload)
+    fig.savefig(
+        obs_nom_noload_traj_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_err(t, X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload)
+    fig.savefig(
+        obs_nom_noload_err_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_psd(
+        X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload, t_step
+    )
+    fig.savefig(
+        obs_nom_noload_psd_path,
+        **SAVEFIG_KW,
+    )
+
+    # Nominal, load
+    nom_sn = uncertainty_linear["nominal_serial_no"]
+    X_valid_load = dataset.loc[
+        (dataset["serial_no"] == nom_sn)
+        & (dataset["episode"] == N_TRAIN)
+        & (dataset["load"]),
+        [
+            "joint_pos",
+            "joint_vel",
+            "joint_trq",
+            "target_joint_pos",
+            "target_joint_vel",
+        ],
+    ].to_numpy()
+    t = np.arange(X_valid_load.shape[0]) * t_step
+    # x0 = np.array([[0.1], [-1], [0.25]])
+    x0 = np.array([[0], [0], [0]])
+    X_obs_linear_load = _simulate_linear(
+        control.StateSpace(*observer_linear["P"]),
+        control.StateSpace(*observer_linear["K"]),
+        X_valid_load,
+        x0=x0,
+    )
+    kp = models_koopman.loc[
+        (models_koopman["serial_no"] == nom_sn) & (~models_koopman["load"]),
+        "koopman_pipeline",
+    ].item()
+    X_obs_koopman_load = _simulate_koopman(
+        control.StateSpace(*observer_koopman["P"]),
+        control.StateSpace(*observer_koopman["K"]),
+        X_valid_load,
+        kp,
+        x0=x0,
+    )
+    fig, ax = _plot_traj(t, X_valid_load, X_obs_linear_load, X_obs_koopman_load)
+    fig.savefig(
+        obs_nom_load_traj_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_err(t, X_valid_load, X_obs_linear_load, X_obs_koopman_load)
+    fig.savefig(
+        obs_nom_load_err_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_psd(X_valid_load, X_obs_linear_load, X_obs_koopman_load, t_step)
+    fig.savefig(
+        obs_nom_load_psd_path,
+        **SAVEFIG_KW,
+    )
+
+    # Off-nominal, no load
+    nom_sn = uncertainty_linear["nominal_serial_no"]
+    # offnom_sn = "011020"
+    offnom_sn = "011011"
+    assert nom_sn != offnom_sn
+    X_valid_noload = dataset.loc[
+        (dataset["serial_no"] == offnom_sn)
+        & (dataset["episode"] == N_TRAIN)
+        & (~dataset["load"]),
+        [
+            "joint_pos",
+            "joint_vel",
+            "joint_trq",
+            "target_joint_pos",
+            "target_joint_vel",
+        ],
+    ].to_numpy()
+    t = np.arange(X_valid_noload.shape[0]) * t_step
+    # x0 = np.array([[0.1], [-1], [0.25]])
+    x0 = np.array([[0], [0], [0]])
+    X_obs_linear_noload = _simulate_linear(
+        control.StateSpace(*observer_linear["P"]),
+        control.StateSpace(*observer_linear["K"]),
+        X_valid_noload,
+        x0=x0,
+    )
+    kp = models_koopman.loc[
+        (models_koopman["serial_no"] == offnom_sn) & (~models_koopman["load"]),
+        "koopman_pipeline",
+    ].item()
+    kp.regressor_.coef_ = None  # Make super sure it's not being used
+    X_obs_koopman_noload = _simulate_koopman(
+        control.StateSpace(*observer_koopman["P"]),
+        control.StateSpace(*observer_koopman["K"]),
+        X_valid_noload,
+        kp,
+        x0=x0,
+    )
+    fig, ax = _plot_traj(t, X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload)
+    fig.savefig(
+        obs_offnom_noload_traj_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_err(t, X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload)
+    fig.savefig(
+        obs_offnom_noload_err_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_psd(
+        X_valid_noload, X_obs_linear_noload, X_obs_koopman_noload, t_step
+    )
+    fig.savefig(
+        obs_offnom_noload_psd_path,
         **SAVEFIG_KW,
     )
 
@@ -1865,3 +2130,308 @@ def _psd_error(reference, predicted, t_step):
         nperseg=512,
     )
     return f, err_spec
+
+
+def _plot_traj(t, X_test, Xp_linear, Xp_koopman):
+    """Plot trajectory."""
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(t, X_test[:, 0], color=OKABE_ITO["black"], label="Measured")
+    ax[1].plot(t, X_test[:, 1], color=OKABE_ITO["black"])
+    ax[2].plot(t, X_test[:, 2], color=OKABE_ITO["black"])
+    ax[0].plot(t, Xp_koopman[:, 0], color=OKABE_ITO["blue"], label="Koopman")
+    ax[1].plot(t, Xp_koopman[:, 1], color=OKABE_ITO["blue"])
+    ax[2].plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
+    ax[0].plot(t, Xp_linear[:, 0], color=OKABE_ITO["vermillion"], label="Linear")
+    ax[1].plot(t, Xp_linear[:, 1], color=OKABE_ITO["vermillion"])
+    ax[2].plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
+    # Inset axis 1
+    axins1 = ax[1].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(1.5, 1.8),
+        ylim=(3.05, 3.20),
+    )
+    axins1.plot(t, X_test[:, 1], color=OKABE_ITO["black"])
+    axins1.plot(t, Xp_koopman[:, 1], color=OKABE_ITO["blue"])
+    axins1.plot(t, Xp_linear[:, 1], color=OKABE_ITO["vermillion"])
+    ax[1].indicate_inset_zoom(axins1, edgecolor="black")
+    # Inset axis 2
+    axins2 = ax[2].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(1.5, 1.8),
+        ylim=(-0.05, 0.25),
+    )
+    axins2.plot(t, X_test[:, 2], color=OKABE_ITO["black"])
+    axins2.plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
+    axins2.plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
+    ax[2].indicate_inset_zoom(axins2, edgecolor="black")
+    # Labels
+    ax[0].set_ylabel(r"$\theta(t)$ (rad)")
+    ax[1].set_ylabel(r"$\dot{\theta}(t)$ (rad/s)")
+    ax[2].set_ylabel(r"$i(t)$ (unitless)")
+    ax[2].set_xlabel(r"$t$ (s)")
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[2],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    return fig, ax
+
+
+def _plot_err(t, X_test, Xp_linear, Xp_koopman):
+    """Plot trajectory error."""
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(
+        t,
+        _percent_error(X_test[:, 0], Xp_linear[:, 0]),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[1].plot(
+        t,
+        _percent_error(X_test[:, 1], Xp_linear[:, 1]),
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[2].plot(
+        t,
+        _percent_error(X_test[:, 2], Xp_linear[:, 2]),
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[0].plot(
+        t,
+        _percent_error(X_test[:, 0], Xp_koopman[:, 0]),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[1].plot(
+        t,
+        _percent_error(X_test[:, 1], Xp_koopman[:, 1]),
+        color=OKABE_ITO["blue"],
+    )
+    ax[2].plot(
+        t,
+        _percent_error(X_test[:, 2], Xp_koopman[:, 2]),
+        color=OKABE_ITO["blue"],
+    )
+    axins2 = ax[2].inset_axes(
+        [0.5, 0.5, 0.48, 0.48],
+        xlim=(0, 0.5),
+        ylim=(-95, 95),
+    )
+    axins2.plot(
+        t, _percent_error(X_test[:, 2], Xp_linear[:, 2]), color=OKABE_ITO["vermillion"]
+    )
+    axins2.plot(
+        t, _percent_error(X_test[:, 2], Xp_koopman[:, 2]), color=OKABE_ITO["blue"]
+    )
+    ax[2].indicate_inset_zoom(axins2, edgecolor="black")
+    ax[0].set_ylabel(r"$\Delta\theta(t)$ (\%)")
+    ax[1].set_ylabel(r"$\Delta\dot{\theta}(t)$ (\%)")
+    ax[2].set_ylabel(r"$\Delta i(t)$ (\%)")
+    ax[2].set_xlabel(r"$t$ (s)")
+    ax[0].set_yticks([-0.1, -0.05, 0, 0.05, 0.1])
+    ax[1].set_yticks([-20, -10, 0, 10, 20])
+    ax[2].set_yticks([-100, -50, 0, 50, 100])
+    ax[0].set_ylim([-0.1, 0.1])
+    ax[1].set_ylim([-20, 20])
+    ax[2].set_ylim([-100, 100])
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    return fig, ax
+
+
+def _plot_psd(X_test, Xp_linear, Xp_koopman, t_step):
+    """Plot trajectory error PSD."""
+    fig, ax = plt.subplots(
+        3,
+        1,
+        constrained_layout=True,
+        figsize=(LW, LW),
+        sharex=True,
+    )
+    ax[0].plot(
+        *_psd_error(X_test[:, 0], Xp_linear[:, 0], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[0].plot(
+        *_psd_error(X_test[:, 0], Xp_koopman[:, 0], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[1].plot(
+        *_psd_error(X_test[:, 1], Xp_linear[:, 1], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[1].plot(
+        *_psd_error(X_test[:, 1], Xp_koopman[:, 1], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[2].plot(
+        *_psd_error(X_test[:, 2], Xp_linear[:, 2], t_step),
+        color=OKABE_ITO["vermillion"],
+        label="Linear",
+    )
+    ax[2].plot(
+        *_psd_error(X_test[:, 2], Xp_koopman[:, 2], t_step),
+        color=OKABE_ITO["blue"],
+        label="Koopman",
+    )
+    ax[2].set_xlabel(r"$f$ (Hz)")
+    ax[0].set_ylabel(
+        r"$S_{\theta^\mathrm{e}\theta^\mathrm{e}}(f)$ "
+        "\n"
+        r"($\mathrm{rad}^2/\mathrm{Hz}$)"
+    )
+    ax[1].set_ylabel(
+        r"$S_{\dot{\theta}^\mathrm{e}\dot{\theta}^\mathrm{e}}(f)$ "
+        "\n"
+        r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
+    )
+    ax[2].set_ylabel(r"$S_{i^\mathrm{e}i^\mathrm{e}}(f)$" "\n" r"($1/\mathrm{Hz}$)")
+    fig.align_ylabels()
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[1],
+        ],
+        loc="upper center",
+        ncol=3,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    return fig, ax
+
+
+def _plot_weights(obs):
+    """Plot weights used in synthesized observer."""
+    fig, ax = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    ax.semilogx(
+        obs["f"],
+        20 * np.log10(obs["mag_p"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{p}$",
+        color=OKABE_ITO["sky blue"],
+    )
+    ax.semilogx(
+        obs["f"],
+        20 * np.log10(obs["mag_u"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{u}$",
+        color=OKABE_ITO["orange"],
+        ls="--",
+    )
+    ax.semilogx(
+        obs["f"],
+        20 * np.log10(obs["mag_D"]),
+        label=r"$\boldsymbol{\mathcal{W}}_{\!\Delta}$",
+        color=OKABE_ITO["bluish green"],
+    )
+    ax.semilogx(
+        obs["f"],
+        20 * np.log10(obs["mag_P"]),
+        label=r"$\boldsymbol{\mathcal{CG}}$",
+        color=OKABE_ITO["blue"],
+    )
+    ax.semilogx(
+        obs["f"],
+        20 * np.log10(obs["mag_F"]),
+        label=r"$\boldsymbol{\mathcal{K}}$",
+        color=OKABE_ITO["vermillion"],
+    )
+    ax.set_ylabel(r"$\bar{\sigma}({\bf W}(f))$ (dB)")
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylim([-70, 10])
+    fig.legend(
+        handles=[
+            ax.get_lines()[0],
+            ax.get_lines()[1],
+            ax.get_lines()[2],
+            ax.get_lines()[3],
+            ax.get_lines()[4],
+        ],
+        loc="upper center",
+        ncol=5,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    return fig, ax
+
+
+def _simulate_linear(P, K, X_valid, x0=None):
+    if x0 is None:
+        x0 = np.zeros((3, 1))
+    meas = X_valid[:, :3].T
+    inpt = X_valid[:, 3:5].T
+    X = np.zeros((P.nstates, X_valid.shape[0]))
+    X[:, [0]] = x0
+    Xc = np.zeros((K.nstates, X_valid.shape[0]))
+    for k in range(1, X_valid.shape[0] + 1):
+        # Compute error first since 0 has no D matrix
+        err = P.C @ meas[:, k - 1] - P.C @ X[:, k - 1]
+        # Compute control output
+        u = K.C @ Xc[:, k - 1] + K.D @ err
+        if k < X.shape[1]:
+            # Update plant with control input
+            X[:, k] = P.A @ X[:, k - 1] + P.B @ (inpt[:, k - 1] + u)
+            # Update controller
+            Xc[:, k] = K.A @ Xc[:, k - 1] + K.B @ err
+    return X.T
+
+
+def _simulate_koopman(P, K, X_valid, kp, x0=None, linear_prediction=False):
+    if x0 is None:
+        x0 = np.zeros((3, 1))
+    meas_ = X_valid[:, :3].T
+    meas = kp.lift_state(meas_.T, episode_feature=False).T
+    inpt = X_valid[:, 3:5].T
+    X = np.zeros((P.nstates, X_valid.shape[0]))
+    X[:, [0]] = kp.lift_state(x0.T, episode_feature=False).T
+    Xc = np.zeros((K.nstates, X_valid.shape[0]))
+    for k in range(1, X_valid.shape[0] + 1):
+        # Compute error first since 0 has no D matrix
+        err = P.C @ meas[:, k - 1] - P.C @ X[:, k - 1]
+        # Compute control output
+        u = K.C @ Xc[:, k - 1] + K.D @ err
+        if k < X.shape[1]:
+            # Update plant with control input
+            if linear_prediction:
+                X[:, k] = P.A @ X[:, k - 1] + P.B @ (inpt[:, k - 1] + u)
+            else:
+                # TODO Need to actually plot X_rl instead of X I think
+                Xt_ret = kp.retract_state(X[:, [k - 1]].T, episode_feature=False)
+                X_rl = kp.lift_state(Xt_ret, episode_feature=False).T.ravel()
+                X[:, k] = P.A @ X_rl + P.B @ (inpt[:, k - 1] + u)
+            # Update controller
+            Xc[:, k] = K.A @ Xc[:, k - 1] + K.B @ err
+    return X.T
