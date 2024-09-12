@@ -1505,6 +1505,35 @@ def action_plot_observer(
     )
 
 
+def action_plot_phase(
+    phase_path: pathlib.Path,
+    phase_plot_path: pathlib.Path,
+    phase_txt_path: pathlib.Path,
+):
+    """Plot phase."""
+    phase_plot_path.parent.mkdir(parents=True, exist_ok=True)
+    phase = joblib.load(phase_path)
+    fig, ax = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    ax.plot(
+        phase.iloc[1]["phases"],
+        phase.iloc[1]["inner_products"],
+        color=OKABE_ITO["blue"],
+    )
+    max_phase = phase.iloc[1]["phases"][np.argmax(phase.iloc[1]["inner_products"])]
+    phase_txt_path.write_text(str(max_phase))
+    ax.set_xlabel(r"$\varphi$ (rad)")
+    ax.set_ylabel(
+        r"$\langle \dot{\theta}^\mathrm{e}, \sin(100\theta + \varphi) \rangle$ (unitless)"
+    )
+    fig.savefig(
+        phase_plot_path,
+        **SAVEFIG_KW,
+    )
+
+
 def _circular_mean(theta: np.ndarray) -> float:
     """Circular mean."""
     avg_sin = np.mean(np.sin(theta))

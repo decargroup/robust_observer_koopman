@@ -499,3 +499,25 @@ def task_plot_observer():
         ],
         "clean": True,
     }
+
+
+def task_plot_phase():
+    """Plot observer."""
+    phase_path = WD.joinpath("build", "phase.pickle")
+    phase_plot_path = WD.joinpath("figures", "phase.pdf")
+    phase_txt_path = WD.joinpath("figures", "phase.txt")
+    return {
+        "actions": [
+            (
+                actions.action_plot_phase,
+                (
+                    phase_path,
+                    phase_plot_path,
+                    phase_txt_path,
+                ),
+            )
+        ],
+        "file_dep": [phase_path],
+        "targets": [phase_plot_path, phase_txt_path],
+        "clean": True,
+    }
