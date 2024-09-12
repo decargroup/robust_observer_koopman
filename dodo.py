@@ -588,3 +588,72 @@ def task_plot_uncertainty():
         "targets": [WD.joinpath("figures", t) for t in targets_linear],
         "clean": True,
     }
+
+
+def task_plot_outliers():
+    """Plot outliers."""
+    # Koopman action
+    residuals_koopman_path = WD.joinpath("build", "residuals_koopman.pickle")
+    uncertainty_koopman_path = WD.joinpath("build", "uncertainty_koopman_load.pickle")
+    models_koopman_path = WD.joinpath("build", "models_koopman.pickle")
+    nominal_path = WD.joinpath("build", "nominal_load.txt")
+    targets_koopman = [
+        "outliers_bound_mimo_koopman.pdf",
+        "outliers_bound_msv_koopman.pdf",
+        "outliers_koopman_additive.pdf",
+        "outliers_koopman_input_multiplicative.pdf",
+        "outliers_koopman_inverse_additive.pdf",
+        "outliers_koopman_inverse_input_multiplicative.pdf",
+        "outliers_koopman_inverse_output_multiplicative.pdf",
+        "outliers_koopman_output_multiplicative.pdf",
+    ]
+    yield {
+        "name": "koopman",
+        "actions": [
+            (
+                actions.action_plot_outliers,
+                (
+                    residuals_koopman_path,
+                    uncertainty_koopman_path,
+                    models_koopman_path,
+                    nominal_path,
+                    "koopman",
+                ),
+            )
+        ],
+        "file_dep": [residuals_koopman_path, uncertainty_koopman_path],
+        "targets": [WD.joinpath("figures", t) for t in targets_koopman],
+        "clean": True,
+    }
+    # Linear action
+    residuals_linear_path = WD.joinpath("build", "residuals_linear.pickle")
+    uncertainty_linear_path = WD.joinpath("build", "uncertainty_linear_load.pickle")
+    models_linear_path = WD.joinpath("build", "models_linear.pickle")
+    targets_linear = [
+        "outliers_bound_mimo_linear.pdf",
+        "outliers_bound_msv_linear.pdf",
+        "outliers_linear_additive.pdf",
+        "outliers_linear_input_multiplicative.pdf",
+        "outliers_linear_inverse_additive.pdf",
+        "outliers_linear_inverse_input_multiplicative.pdf",
+        "outliers_linear_inverse_output_multiplicative.pdf",
+        "outliers_linear_output_multiplicative.pdf",
+    ]
+    yield {
+        "name": "linear",
+        "actions": [
+            (
+                actions.action_plot_outliers,
+                (
+                    residuals_linear_path,
+                    uncertainty_linear_path,
+                    models_linear_path,
+                    nominal_path,
+                    "linear",
+                ),
+            )
+        ],
+        "file_dep": [residuals_linear_path, uncertainty_linear_path],
+        "targets": [WD.joinpath("figures", t) for t in targets_linear],
+        "clean": True,
+    }
