@@ -2540,7 +2540,7 @@ def _plot_weights_combined(obs_linear, obs_koopman):
     )
     ax[0].set_ylabel(r"$\bar{\sigma}({\bf W}(f))$ (dB)")
     ax[1].set_ylabel(r"$\bar{\sigma}({\bf W}(f))$ (dB)")
-    ax[0].set_title("(a) linear observer")
+    ax[0].set_title("(a) Linear observer")
     ax[1].set_title("(b) Koopman observer")
     ax[1].set_xlabel(r"$f$ (Hz)")
     ax[0].set_ylim([-30, 10])
