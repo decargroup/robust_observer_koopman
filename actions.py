@@ -1316,6 +1316,7 @@ def action_plot_observer(
     observer_koopman_path: pathlib.Path,
     obs_weights_linear_path: pathlib.Path,
     obs_weights_koopman_path: pathlib.Path,
+    obs_weights_path: pathlib.Path,
     obs_nom_noload_traj_path: pathlib.Path,
     obs_nom_noload_err_path: pathlib.Path,
     obs_nom_noload_psd_path: pathlib.Path,
@@ -1347,6 +1348,11 @@ def action_plot_observer(
     fig, ax = _plot_weights(observer_koopman)
     fig.savefig(
         obs_weights_koopman_path,
+        **SAVEFIG_KW,
+    )
+    fig, ax = _plot_weights_combined(observer_linear, observer_koopman)
+    fig.savefig(
+        obs_weights_path,
         **SAVEFIG_KW,
     )
 
@@ -2452,6 +2458,100 @@ def _plot_weights(obs):
             ax.get_lines()[2],
             ax.get_lines()[3],
             ax.get_lines()[4],
+        ],
+        loc="upper center",
+        ncol=5,
+        handlelength=1,
+        bbox_to_anchor=(0.5, 0.01),
+    )
+    return fig, ax
+
+
+def _plot_weights_combined(obs_linear, obs_koopman):
+    """Plot weights used in synthesized observer."""
+    fig, ax = plt.subplots(
+        2,
+        1,
+        sharex=True,
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    ax[0].semilogx(
+        obs_linear["f"],
+        20 * np.log10(obs_linear["mag_p"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{p}$",
+        color=OKABE_ITO["sky blue"],
+    )
+    ax[0].semilogx(
+        obs_linear["f"],
+        20 * np.log10(obs_linear["mag_u"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{u}$",
+        color=OKABE_ITO["orange"],
+        ls="--",
+    )
+    ax[0].semilogx(
+        obs_linear["f"],
+        20 * np.log10(obs_linear["mag_D"]),
+        label=r"$\boldsymbol{\mathcal{W}}_{\!\Delta}$",
+        color=OKABE_ITO["bluish green"],
+    )
+    ax[0].semilogx(
+        obs_linear["f"],
+        20 * np.log10(obs_linear["mag_P"]),
+        label=r"$\boldsymbol{\mathcal{CG}}$",
+        color=OKABE_ITO["blue"],
+    )
+    ax[0].semilogx(
+        obs_linear["f"],
+        20 * np.log10(obs_linear["mag_F"]),
+        label=r"$\boldsymbol{\mathcal{K}}$",
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[1].semilogx(
+        obs_koopman["f"],
+        20 * np.log10(obs_koopman["mag_p"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{p}$",
+        color=OKABE_ITO["sky blue"],
+    )
+    ax[1].semilogx(
+        obs_koopman["f"],
+        20 * np.log10(obs_koopman["mag_u"]),
+        label=r"$\boldsymbol{\mathcal{W}}_\mathrm{u}$",
+        color=OKABE_ITO["orange"],
+        ls="--",
+    )
+    ax[1].semilogx(
+        obs_koopman["f"],
+        20 * np.log10(obs_koopman["mag_D"]),
+        label=r"$\boldsymbol{\mathcal{W}}_{\!\Delta}$",
+        color=OKABE_ITO["bluish green"],
+    )
+    ax[1].semilogx(
+        obs_koopman["f"],
+        20 * np.log10(obs_koopman["mag_P"]),
+        label=r"$\boldsymbol{\mathcal{CG}}$",
+        color=OKABE_ITO["blue"],
+    )
+    ax[1].semilogx(
+        obs_koopman["f"],
+        20 * np.log10(obs_koopman["mag_F"]),
+        label=r"$\boldsymbol{\mathcal{K}}$",
+        color=OKABE_ITO["vermillion"],
+    )
+    ax[0].set_ylabel(r"$\bar{\sigma}({\bf W}(f))$ (dB)")
+    ax[1].set_ylabel(r"$\bar{\sigma}({\bf W}(f))$ (dB)")
+    ax[0].set_title("(a) linear observer")
+    ax[1].set_title("(b) Koopman observer")
+    ax[1].set_xlabel(r"$f$ (Hz)")
+    ax[0].set_ylim([-30, 10])
+    ax[1].set_ylim([-30, 10])
+    fig.legend(
+        handles=[
+            ax[0].get_lines()[0],
+            ax[0].get_lines()[1],
+            ax[0].get_lines()[2],
+            ax[0].get_lines()[3],
+            ax[0].get_lines()[4],
         ],
         loc="upper center",
         ncol=5,

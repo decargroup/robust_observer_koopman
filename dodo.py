@@ -438,6 +438,7 @@ def task_plot_observer():
     observer_koopman = WD.joinpath("build", "observer_koopman.pickle")
     obs_weights_linear = WD.joinpath("figures", "observer_weights_linear.pdf")
     obs_weights_koopman = WD.joinpath("figures", "observer_weights_koopman.pdf")
+    obs_weights = WD.joinpath("figures", "observer_weights.pdf")
     obs_nom_noload_traj = WD.joinpath("figures", "observer_nominal_noload_traj.pdf")
     obs_nom_noload_err = WD.joinpath("figures", "observer_nominal_noload_err.pdf")
     obs_nom_noload_psd = WD.joinpath("figures", "observer_nominal_noload_psd.pdf")
@@ -463,6 +464,7 @@ def task_plot_observer():
                     observer_koopman,
                     obs_weights_linear,
                     obs_weights_koopman,
+                    obs_weights,
                     obs_nom_noload_traj,
                     obs_nom_noload_err,
                     obs_nom_noload_psd,
@@ -487,6 +489,7 @@ def task_plot_observer():
         "targets": [
             obs_weights_linear,
             obs_weights_koopman,
+            obs_weights,
             obs_nom_noload_traj,
             obs_nom_noload_err,
             obs_nom_noload_psd,
