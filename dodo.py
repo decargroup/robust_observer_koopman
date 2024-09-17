@@ -1,4 +1,7 @@
-"""Define and automate tasks with ``doit``."""
+"""Define and automate tasks with ``doit``.
+
+Actions associated with tasks defined here can be found in ``actions.py``.
+"""
 
 import pathlib
 
@@ -12,7 +15,7 @@ WD = pathlib.Path(__file__).parent.resolve()
 
 
 def task_preprocess_experiments():
-    """Preprocess raw data into pickle containing Pandas ``DataFrame``."""
+    """Preprocess raw data into pickle containing a dataframe."""
     raw_dataset = WD.joinpath("dataset", "raw", "batch_b")
     preprocessed_dataset = WD.joinpath("build", "dataset.pickle")
     return {
@@ -505,7 +508,7 @@ def task_plot_observer():
 
 
 def task_plot_phase():
-    """Plot observer."""
+    """Plot phase."""
     phase_path = WD.joinpath("build", "phase.pickle")
     phase_plot_path = WD.joinpath("figures", "phase.pdf")
     phase_txt_path = WD.joinpath("figures", "phase.txt")

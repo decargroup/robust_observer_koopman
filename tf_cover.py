@@ -1,4 +1,7 @@
-"""Calculate the optimal transfer function to bound residual magnitudes."""
+"""Calculate the optimal transfer function to bound residual magnitudes.
+
+Thanks to Jonathan Eid for providing the initial version of this function.
+"""
 
 import control
 import numpy as np

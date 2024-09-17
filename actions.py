@@ -1,9 +1,10 @@
-"""Define and automate tasks with ``doit``."""
+"""Actions associated with tasks defined in ``dodo.py``."""
 
 import itertools
 import pathlib
 import re
 import shutil
+from typing import Any, Dict, List, Optional, Tuple
 
 import control
 import joblib
@@ -60,7 +61,7 @@ def action_preprocess_experiments(
     raw_dataset_path: pathlib.Path,
     preprocessed_dataset_path: pathlib.Path,
 ):
-    """Preprocess raw data into pickle containing Pandas ``DataFrame``."""
+    """Preprocess raw data into pickle containing a dataframe."""
     preprocessed_dataset_path.parent.mkdir(parents=True, exist_ok=True)
     gear_ratio = 1 / 100
     rad_per_deg = 2 * np.pi / 360
@@ -692,7 +693,7 @@ def action_synthesize_observer(
     ax.legend(loc="lower right")
     fig.savefig(weight_plot_path)
     # Synthesize controller
-    K, info = obs_syn.mixed_H2_Hinf(F, n_z2, n_w2, n_y, n_u, initial_guess=None)
+    K, info = obs_syn.mixed_H2_Hinf(F, n_z2, n_w2, n_y, n_u)
     if K is None:
         raise RuntimeError(
             f"Could not find solution to mixed H2-Hinf problem: {info['status']}"
@@ -2084,7 +2085,18 @@ def action_plot_outliers(
 
 
 def _circular_mean(theta: np.ndarray) -> float:
-    """Circular mean."""
+    """Compute the circular mean.
+
+    Parameters
+    ----------
+    theta : np.ndarray
+        Array of angles in radians.
+
+    Returns
+    -------
+    float :
+        Circular mean of the angles.
+    """
     avg_sin = np.mean(np.sin(theta))
     avg_cos = np.mean(np.cos(theta))
     avg = np.arctan2(avg_sin, avg_cos)
@@ -2092,15 +2104,39 @@ def _circular_mean(theta: np.ndarray) -> float:
 
 
 def _residuals(
-    ss_nom,
-    ss_list,
-    t_step,
-    f_plot,
-    form="additive",
-):
-    """Compute residual frequency-by-frequency."""
+    ss_nom: control.StateSpace,
+    ss_list: List[control.StateSpace],
+    t_step: float,
+    f_max: float,
+    form: str = "additive",
+) -> Dict[str, Any]:
+    """Compute residual frequency-by-frequency.
 
-    def _res(f, ss):
+    Parameters
+    ----------
+    ss_nom : control.StateSpace
+        Nominal state-space model.
+    ss_list : List[control.StateSpace]
+        Off-nominal state-space models.
+    t_step : float
+        Timestep (s).
+    f_max : float
+        Maximum frequency to consider (Hz).
+    form : str
+        Uncertainty form. One of "additive", "input_multiplicative",
+        "output_multiplicative", "inverse_additive",
+        "inverse_input_multiplicative", "inverse_output_multiplicative".
+
+    Returns
+    -------
+    Dict[str, Any] :
+        Output dictionary with keys "magnitudes", "residuals", "bound",
+        "peak_bound", and "area_bound". Values are the residual magnitudes,
+        the complex residuals, the residual magnitude bound, the peak of the
+        residual bound, and the area of the residual bound.
+    """
+
+    def _res(f: float, ss: control.StateSpace) -> np.ndarray:
         """Compute residual at given frequency."""
         G = _transfer_matrix(f, ss_nom, t_step)
         G_p = _transfer_matrix(f, ss, t_step)
@@ -2124,7 +2160,7 @@ def _residuals(
     magnitudes = []
     for ss in ss_list:
         # Generate frequency response data
-        res = np.stack([_res(f_plot[k], ss) for k in range(f_plot.shape[0])], axis=-1)
+        res = np.stack([_res(f_max[k], ss) for k in range(f_max.shape[0])], axis=-1)
         mag = np.array(
             [scipy.linalg.svdvals(res[:, :, k])[0] for k in range(res.shape[2])]
         )
@@ -2134,7 +2170,7 @@ def _residuals(
     bound = np.max(np.vstack(magnitudes), axis=0)
     # Compute peak of max bound
     peak_bound = np.max(bound)
-    area_bound = np.trapz(bound, x=f_plot)
+    area_bound = np.trapz(bound, x=f_max)
     out = {
         "magnitudes": magnitudes,
         "residuals": residuals,
@@ -2145,15 +2181,45 @@ def _residuals(
     return out
 
 
-def _transfer_matrix(f, ss, t_step):
-    """Compute a transfer matrix at a frequency."""
+def _transfer_matrix(
+    f: float,
+    ss: control.StateSpace,
+    t_step: float,
+) -> np.ndarray:
+    """Compute a transfer matrix at a frequency.
+
+    Parameters
+    ----------
+    f : float
+        Frequency (Hz).
+    ss : control.StateSpace
+        State-space model.
+    t_step : float
+        Timestep (s)
+
+    Returns
+    -------
+    np.ndarray :
+        Transfer matrix at the specified frequency.
+    """
     z = np.exp(1j * 2 * np.pi * f * t_step)
     G = ss.C @ scipy.linalg.solve((np.diag([z] * ss.A.shape[0]) - ss.A), ss.B) + ss.D
     return G
 
 
-def _combine(G):
-    """Combine arraylike of transfer functions into a MIMO TF."""
+def _combine(G: np.ndarray) -> control.TransferFunction:
+    """Combine arraylike of transfer functions into a MIMO TF.
+
+    Patameters
+    ----------
+    G : np.ndarray
+        Two-dimensionay array of ``control.TransferFunction`` objects.
+
+    Returns
+    -------
+    control.TransferFunction :
+        Transfer matrix object.
+    """
     G = np.array(G)
     num = []
     den = []
@@ -2171,14 +2237,36 @@ def _combine(G):
     return G_tf
 
 
-def _max_sv(ss, f, t_step):
-    """Maximum singular value plot."""
+def _max_sv(
+    ss: control.StateSpace,
+    f: np.ndarray,
+    t_step: float,
+) -> np.ndarray:
+    """Maximum singular value at each frequency.
+
+    Parameters
+    ----------
+    ss : control.StateSpace
+        State-space model.
+    f : np.ndarray
+        Array of frequencies to evaluate maximum singular value (Hz).
+    t_step : float
+        Timestep (s).
+
+    Returns
+    -------
+    np.ndarray :
+        Maximum singular value of transfer matrix at each frequency.
+    """
     tm = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
     mag = np.array([scipy.linalg.svdvals(tm[k, :, :])[0] for k in range(tm.shape[0])])
     return mag
 
 
-def _percent_error(reference: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+def _percent_error(
+    reference: np.ndarray,
+    predicted: np.ndarray,
+) -> np.ndarray:
     """Calculate percent error from reference and predicted trajectories.
 
     Normalized using maximum amplitude of reference trajectory.
@@ -2200,8 +2288,27 @@ def _percent_error(reference: np.ndarray, predicted: np.ndarray) -> np.ndarray:
     return percent_error
 
 
-def _psd_error(reference, predicted, t_step):
-    """Calculate error PSD."""
+def _psd_error(
+    reference: np.ndarray,
+    predicted: np.ndarray,
+    t_step: float,
+) -> np.ndarray:
+    """Calculate power spectral density of trajectory error.
+
+    Parameters
+    ----------
+    reference : np.ndarray
+        Reference trajectory, witout episode feature.
+    predicted : np.ndarray
+        Predicted trajectory, witout episode feature.
+    t_step : float
+        Timestep.
+
+    Returns
+    -------
+    np.ndarray :
+        Power spectral density of trajectory error.
+    """
     err = reference - predicted
     f, err_spec = scipy.signal.welch(
         err,
@@ -2211,8 +2318,30 @@ def _psd_error(reference, predicted, t_step):
     return f, err_spec
 
 
-def _plot_traj(t, X_test, Xp_linear, Xp_koopman):
-    """Plot trajectory."""
+def _plot_traj(
+    t: np.ndarray,
+    X_test: np.ndarray,
+    Xp_linear: np.ndarray,
+    Xp_koopman: np.ndarray,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot trajectory.
+
+    Parameters
+    ----------
+    t : np.ndarray
+        Time array (s).
+    X_test : np.ndarray
+        Reference trajectory.
+    Xp_linear : np.ndarray
+        Linear predictions.
+    Xp_koopman : np.ndarray
+        Koopman predictiopns.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes] :
+        Matplotlib figure and axis objects.
+    """
     fig, ax = plt.subplots(
         3,
         1,
@@ -2269,8 +2398,30 @@ def _plot_traj(t, X_test, Xp_linear, Xp_koopman):
     return fig, ax
 
 
-def _plot_err(t, X_test, Xp_linear, Xp_koopman):
-    """Plot trajectory error."""
+def _plot_err(
+    t: np.ndarray,
+    X_test: np.ndarray,
+    Xp_linear: np.ndarray,
+    Xp_koopman: np.ndarray,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot trajectory error.
+
+    Parameters
+    ----------
+    t : np.ndarray
+        Time array (s).
+    X_test : np.ndarray
+        Reference trajectory.
+    Xp_linear : np.ndarray
+        Linear predictions.
+    Xp_koopman : np.ndarray
+        Koopman predictiopns.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes] :
+        Matplotlib figure and axis objects.
+    """
     fig, ax = plt.subplots(
         3,
         1,
@@ -2346,8 +2497,30 @@ def _plot_err(t, X_test, Xp_linear, Xp_koopman):
     return fig, ax
 
 
-def _plot_psd(X_test, Xp_linear, Xp_koopman, t_step):
-    """Plot trajectory error PSD."""
+def _plot_psd(
+    X_test: np.ndarray,
+    Xp_linear: np.ndarray,
+    Xp_koopman: np.ndarray,
+    t_step: np.ndarray,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot power spectral density of error.
+
+    Parameters
+    ----------
+    t : np.ndarray
+        Time array (s).
+    X_test : np.ndarray
+        Reference trajectory.
+    Xp_linear : np.ndarray
+        Linear predictions.
+    Xp_koopman : np.ndarray
+        Koopman predictiopns.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes] :
+        Matplotlib figure and axis objects.
+    """
     fig, ax = plt.subplots(
         3,
         1,
@@ -2411,8 +2584,24 @@ def _plot_psd(X_test, Xp_linear, Xp_koopman, t_step):
     return fig, ax
 
 
-def _plot_weights(obs):
-    """Plot weights used in synthesized observer."""
+def _plot_weights(obs: Dict[str, Any]) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot linear or weights used in synthesized observer.
+
+    Parameters
+    ----------
+    obs : Dict[str, Any]
+        Build outputs of ``synthesize_observer`` task. Relevant items are
+        "f", containing the frequency array, "mag_p", containing the performance
+        weight magnitudes, "mag_u", containing the input weight magnitudes,
+        "mag_D", containing the uncertainty weight magnitudes, "mag_P",
+        containing the plant frequency response magnitudes, and "mag_F",
+        containing the controller frequency response magnitudes.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes] :
+        Matplotlib figure and axis objects.
+    """
     fig, ax = plt.subplots(
         constrained_layout=True,
         figsize=(LW, LW),
@@ -2467,8 +2656,26 @@ def _plot_weights(obs):
     return fig, ax
 
 
-def _plot_weights_combined(obs_linear, obs_koopman):
-    """Plot weights used in synthesized observer."""
+def _plot_weights_combined(
+    obs_linear: Dict[str, Any],
+    obs_koopman: Dict[str, Any],
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot linear and Koopman weights used in synthesized observer.
+
+    Parameters
+    ----------
+    obs_linear : Dict[str, Any]
+        Build outputs of ``synthesize_observer:linear`` task. See
+        :func:`_plot_weights` for details.
+    obs_koopman : Dict[str, Any]
+        Build outputs of ``synthesize_observer:koopman`` task. See
+        :func:`_plot_weights` for details.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes] :
+        Matplotlib figure and axis objects.
+    """
     fig, ax = plt.subplots(
         2,
         1,
@@ -2561,7 +2768,30 @@ def _plot_weights_combined(obs_linear, obs_koopman):
     return fig, ax
 
 
-def _simulate_linear(P, K, X_valid, x0=None):
+def _simulate_linear(
+    P: control.StateSpace,
+    K: control.StateSpace,
+    X_valid: np.ndarray,
+    x0: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Simulate a linear model.
+
+    Parameters
+    ----------
+    P : control.StateSpace
+        Nominal plant model.
+    K : control.StateSpace
+        Controller model.
+    X_valid : np.ndarray
+        Reference trajectory.
+    x0 : Optional[np.ndarray]
+        Initial condition. If unknown, use ``None`` to set to zero.
+
+    Returns
+    -------
+    np.ndarray :
+        Estimated trajectory.
+    """
     if x0 is None:
         x0 = np.zeros((3, 1))
     meas = X_valid[:, :3].T
@@ -2582,7 +2812,38 @@ def _simulate_linear(P, K, X_valid, x0=None):
     return X.T
 
 
-def _simulate_koopman(P, K, X_valid, kp, x0=None, linear_prediction=False):
+def _simulate_koopman(
+    P: control.StateSpace,
+    K: control.StateSpace,
+    X_valid: np.ndarray,
+    kp: pykoop.KoopmanPipeline,
+    x0: Optional[np.ndarray] = None,
+    linear_prediction: bool = False,
+) -> np.ndarray:
+    """Simulate a Koopman model.
+
+    Parameters
+    ----------
+    P : control.StateSpace
+        Nominal plant model.
+    K : control.StateSpace
+        Controller model.
+    X_valid : np.ndarray
+        Reference trajectory.
+    kp : pykoop.KoopmanPipeline
+        Koopman pipeline for nominal plant model.
+    x0 : Optional[np.ndarray]
+        Initial condition. If unknown, use ``None`` to set to zero.
+    linear_prediction : bool
+        If ``True``, does not retract and re-lift states between timesteps. If
+        ``False`` (default, recommended), retracts and re-lifts states between
+        timesteps.
+
+    Returns
+    -------
+    np.ndarray :
+        Estimated trajectory.
+    """
     if x0 is None:
         x0 = np.zeros((3, 1))
     meas_ = X_valid[:, :3].T

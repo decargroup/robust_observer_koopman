@@ -22,7 +22,45 @@ def mixed_H2_Hinf(
     cvxpy_verbose: bool = False,
     cost_scale: float = 1,
 ) -> Tuple[control.StateSpace, Dict[str, Any]]:
-    """Mixed H2-Hinf synthesis."""
+    """Mixed H2-Hinf synthesis.
+
+    Parameters
+    ----------
+    P : control.StateSpace
+        Generalized plant state-space model.
+    n_z2 : int
+        Number of uncertainty outputs.
+    n_w2 : int
+        Number of uncertainty inputs.
+    n_y : int
+        Number of controller inputs.
+    n_u : int
+        Number of controller outputs.
+    initial_guess : Optional[float]
+        Initial guess of H2 norm for bisection. If bisection is not desired,
+        set to ``None``.
+    bisection_eps : float
+        Bisection stops when H2 norm stops changing within this threshold.
+    max_iterations : int
+        Maximum number of bisection iterations.
+    sdp_eps : float
+        SDP solver tolerance.
+    sdp_strictness : float
+        LMI constraint strictness. Should be larger than the SDP solver
+        tolerance.
+    cvxpy_verbose : bool
+        Verbosity flag for CVXPY.
+    cost_scale : float
+        Optional scaling factor for the cost function to help numerical
+        conditioning.
+
+    Returns
+    -------
+    Tuple[control.StateSpace, Dict[str, Any]] :
+            Synthesized controller and solver info, including termination
+            status, achieved norm, number of bisection iterations, and
+            condition numbers in the post-processing step.
+    """
     info = {
         "status": None,
         "nu": None,
