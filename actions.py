@@ -2601,7 +2601,6 @@ def _simulate_koopman(P, K, X_valid, kp, x0=None, linear_prediction=False):
             if linear_prediction:
                 X[:, k] = P.A @ X[:, k - 1] + P.B @ (inpt[:, k - 1] + u)
             else:
-                # TODO Need to actually plot X_rl instead of X I think
                 Xt_ret = kp.retract_state(X[:, [k - 1]].T, episode_feature=False)
                 X_rl = kp.lift_state(Xt_ret, episode_feature=False).T.ravel()
                 X[:, k] = P.A @ X_rl + P.B @ (inpt[:, k - 1] + u)

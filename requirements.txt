@@ -1,0 +1,11 @@
+control==0.10.0
+joblib==1.4.2
+numpy==1.26.4
+pandas==2.2.2
+pykoop==1.2.3
+scipy==1.11.4
+cmcrameri==1.9
+matplotlib==3.8.4
+doit==0.36.0
+cvxpy==1.5.0
+Mosek==10.1.31
