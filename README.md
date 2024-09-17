@@ -1,7 +1,7 @@
-# Uncertainty Modelling and Robust Observer Synthesis Using the Koopman Operator
+# Uncertainty Modelling and Robust Observer Synthesis using the Koopman Operator
 
 This repository contains the companion code for [Uncertainty Modelling and
-Robust Observer Synthesis Using the Koopman Operator](about:blank). All the code
+Robust Observer Synthesis using the Koopman Operator](about:blank). All the code
 required to generate the paper's plots from raw data is included here.
 
 The regression methods detailed in the paper are implemented using
