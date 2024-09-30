@@ -1771,6 +1771,14 @@ def action_plot_uncertainty(
             )
             ax[i, j].set_ylabel(rf"$|W_{{\!\Delta,{i + 1}{j + 1}}}(f)|$ (dB)")
             ax[-1, j].set_xlabel(r"$f$ (Hz)")
+    ax[0, 0].set_ylim(-140, 20)
+    ax[0, 1].set_ylim(-140, 20)
+    ax[1, 0].set_ylim(-140, 20)
+    ax[1, 1].set_ylim(-140, 20)
+    ax[0, 0].set_yticks([-120, -80, -40, 0])
+    ax[0, 1].set_yticks([-120, -80, -40, 0])
+    ax[1, 0].set_yticks([-120, -80, -40, 0])
+    ax[1, 1].set_yticks([-120, -80, -40, 0])
     fig.legend(
         handles=[
             ax[0, 0].get_lines()[0],
@@ -2066,6 +2074,14 @@ def action_plot_outliers(
             )
             ax[i, j].set_ylabel(rf"$|W_{{\!\Delta,{i + 1}{j + 1}}}(f)|$ (dB)")
             ax[-1, j].set_xlabel(r"$f$ (Hz)")
+    ax[0, 0].set_ylim(-140, 20)
+    ax[0, 1].set_ylim(-140, 20)
+    ax[1, 0].set_ylim(-140, 20)
+    ax[1, 1].set_ylim(-140, 20)
+    ax[0, 0].set_yticks([-120, -80, -40, 0])
+    ax[0, 1].set_yticks([-120, -80, -40, 0])
+    ax[1, 0].set_yticks([-120, -80, -40, 0])
+    ax[1, 1].set_yticks([-120, -80, -40, 0])
     fig.legend(
         handles=[
             ax[0, 0].get_lines()[0],
