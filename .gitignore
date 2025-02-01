@@ -3,3 +3,4 @@ dataset
 __pycache__
 build
 figures
+*.bak
