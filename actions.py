@@ -981,20 +981,24 @@ def action_plot_model_predictions(
     ax[2].plot(t, Xp_linear[:, 3], color=OKABE_ITO["vermillion"])
     # Inset axis 1
     axins1 = ax[1].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(1.5, 1.8),
         ylim=(3.05, 3.20),
     )
+    axins1.yaxis.set_label_position("right")
+    axins1.yaxis.tick_right()
     axins1.plot(t, X_test[:, 2], color=OKABE_ITO["black"])
     axins1.plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
     axins1.plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
     ax[1].indicate_inset_zoom(axins1, edgecolor="black")
     # Inset axis 2
     axins2 = ax[2].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(1.5, 1.8),
         ylim=(-0.05, 0.25),
     )
+    axins2.yaxis.set_label_position("right")
+    axins2.yaxis.tick_right()
     axins2.plot(t, X_test[:, 3], color=OKABE_ITO["black"])
     axins2.plot(t, Xp_koopman[:, 3], color=OKABE_ITO["blue"])
     axins2.plot(t, Xp_linear[:, 3], color=OKABE_ITO["vermillion"])
@@ -1061,10 +1065,12 @@ def action_plot_model_predictions(
         color=OKABE_ITO["blue"],
     )
     axins1 = ax[1].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(0, 0.5),
         ylim=(-9.5, 9.5),
     )
+    axins1.yaxis.set_label_position("right")
+    axins1.yaxis.tick_right()
     axins1.plot(
         t, _percent_error(X_test[:, 2], Xp_linear[:, 2]), color=OKABE_ITO["vermillion"]
     )
@@ -1073,10 +1079,12 @@ def action_plot_model_predictions(
     )
     ax[1].indicate_inset_zoom(axins1, edgecolor="black")
     axins2 = ax[2].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(0, 0.5),
         ylim=(-95, 95),
     )
+    axins2.yaxis.set_label_position("right")
+    axins2.yaxis.tick_right()
     axins2.plot(
         t, _percent_error(X_test[:, 3], Xp_linear[:, 3]), color=OKABE_ITO["vermillion"]
     )
@@ -2500,20 +2508,24 @@ def _plot_traj(
     ax[2].plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
     # Inset axis 1
     axins1 = ax[1].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(1.5, 1.8),
         ylim=(3.05, 3.20),
     )
+    axins1.yaxis.set_label_position("right")
+    axins1.yaxis.tick_right()
     axins1.plot(t, X_test[:, 1], color=OKABE_ITO["black"])
     axins1.plot(t, Xp_koopman[:, 1], color=OKABE_ITO["blue"])
     axins1.plot(t, Xp_linear[:, 1], color=OKABE_ITO["vermillion"])
     ax[1].indicate_inset_zoom(axins1, edgecolor="black")
     # Inset axis 2
     axins2 = ax[2].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(1.5, 1.8),
         ylim=(-0.05, 0.25),
     )
+    axins2.yaxis.set_label_position("right")
+    axins2.yaxis.tick_right()
     axins2.plot(t, X_test[:, 2], color=OKABE_ITO["black"])
     axins2.plot(t, Xp_koopman[:, 2], color=OKABE_ITO["blue"])
     axins2.plot(t, Xp_linear[:, 2], color=OKABE_ITO["vermillion"])
@@ -2602,10 +2614,12 @@ def _plot_err(
         color=OKABE_ITO["blue"],
     )
     axins2 = ax[2].inset_axes(
-        [0.5, 0.5, 0.48, 0.48],
+        [0.5, 0.5, 0.38, 0.44],
         xlim=(0, 0.5),
         ylim=(-95, 95),
     )
+    axins2.yaxis.set_label_position("right")
+    axins2.yaxis.tick_right()
     axins2.plot(
         t, _percent_error(X_test[:, 2], Xp_linear[:, 2]), color=OKABE_ITO["vermillion"]
     )
