@@ -1155,6 +1155,9 @@ def action_plot_model_predictions(
         r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
     )
     ax[2].set_ylabel(r"$S_{i^\mathrm{e}i^\mathrm{e}}(f)$" "\n" r"($1/\mathrm{Hz}$)")
+    ax[0].set_xlim([0, 100])
+    ax[1].set_xlim([0, 100])
+    ax[2].set_xlim([0, 100])
     fig.align_ylabels()
     fig.legend(
         handles=[
@@ -2707,6 +2710,9 @@ def _plot_psd(
         r"($\mathrm{rad}^2/\mathrm{s}^2/\mathrm{Hz}$)"
     )
     ax[2].set_ylabel(r"$S_{i^\mathrm{e}i^\mathrm{e}}(f)$" "\n" r"($1/\mathrm{Hz}$)")
+    ax[0].set_xlim([0, 100])
+    ax[1].set_xlim([0, 100])
+    ax[2].set_xlim([0, 100])
     fig.align_ylabels()
     fig.legend(
         handles=[
