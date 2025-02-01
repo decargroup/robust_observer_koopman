@@ -1511,6 +1511,100 @@ def action_plot_observer(
         **SAVEFIG_KW,
     )
 
+def action_plot_summary(
+    dataset_path: pathlib.Path,
+    uncertainty_linear_path: pathlib.Path,
+    uncertainty_koopman_path: pathlib.Path,
+    models_linear_path: pathlib.Path,
+    models_koopman_path: pathlib.Path,
+    observer_linear_path: pathlib.Path,
+    observer_koopman_path: pathlib.Path,
+    summary_path: pathlib.Path,
+):
+    """Plot observer."""
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset = joblib.load(dataset_path)
+    uncertainty_linear = joblib.load(uncertainty_linear_path)
+    # Currently unused but may be used later
+    # uncertainty_koopman = joblib.load(uncertainty_koopman_path)
+    # models_linear = joblib.load(models_linear_path)
+    models_koopman = joblib.load(models_koopman_path)
+    observer_linear = joblib.load(observer_linear_path)
+    observer_koopman = joblib.load(observer_koopman_path)
+    t_step = dataset.attrs["t_step"]
+
+    # Nominal, no load
+    outlier_sn = "000000"
+    serial_nos = pandas.unique(
+        dataset.loc[dataset["serial_no"] != outlier_sn, "serial_no"])
+    training_eps = pandas.unique(
+        dataset.loc[dataset["episode"] >= N_TRAIN, "episode"])
+    errors_linear_lst = []
+    errors_koopman_lst = []
+    for sn in serial_nos:
+        for training_ep in training_eps:
+            X_valid_noload = dataset.loc[
+                (dataset["serial_no"] == sn)
+                & (dataset["episode"] == training_ep)
+                & (~dataset["load"]),
+                [
+                    "joint_pos",
+                    "joint_vel",
+                    "joint_trq",
+                    "target_joint_pos",
+                    "target_joint_vel",
+                ],
+            ].to_numpy()
+            t = np.arange(X_valid_noload.shape[0]) * t_step
+            x0 = np.array([[0], [0], [0]])
+            X_obs_linear_noload = _simulate_linear(
+                control.StateSpace(*observer_linear["P"]),
+                control.StateSpace(*observer_linear["K"]),
+                X_valid_noload,
+                x0=x0,
+            )
+            kp = models_koopman.loc[
+                (models_koopman["serial_no"] == sn) & (~models_koopman["load"]),
+                "koopman_pipeline",
+            ].item()
+            X_obs_koopman_noload = _simulate_koopman(
+                control.StateSpace(*observer_koopman["P"]),
+                control.StateSpace(*observer_koopman["K"]),
+                X_valid_noload,
+                kp,
+                x0=x0,
+            )
+            anrmse_linear = _average_nrmse(
+                X_valid_noload[:, :3],
+                X_obs_linear_noload,
+            ) * 100
+            anrmse_koopman = _average_nrmse(
+                X_valid_noload[:, :3],
+                X_obs_koopman_noload[:, :3],
+            ) * 100
+            errors_linear_lst.append(anrmse_linear)
+            errors_koopman_lst.append(anrmse_koopman)
+    errors_linear = np.array(errors_linear_lst)
+    errors_koopman = np.array(errors_koopman_lst)
+    fig, ax = plt.subplots(
+        constrained_layout=True,
+        figsize=(LW, LW),
+    )
+    bplot = ax.boxplot(
+        [errors_linear, errors_koopman],
+        labels=["Linear", "Koopman"],
+        medianprops=dict(color=OKABE_ITO["black"]),
+        patch_artist=True,
+    )
+    ax.set_xlabel("Observer")
+    ax.set_ylabel("\%RMSE")
+    bplot["boxes"][0].set_facecolor(OKABE_ITO["vermillion"])
+    bplot["boxes"][1].set_facecolor(OKABE_ITO["blue"])
+    fig.savefig(
+        summary_path,
+        **SAVEFIG_KW,
+    )
+
 
 def action_plot_phase(
     phase_path: pathlib.Path,
@@ -1531,9 +1625,9 @@ def action_plot_phase(
     )
     max_phase = phase.iloc[1]["phases"][np.argmax(phase.iloc[1]["inner_products"])]
     phase_txt_path.write_text(str(max_phase))
-    ax.set_xlabel(r"$\varphi$ (rad)")
+    ax.set_xlabel(r"$\hat{\varphi}_i$ (rad)")
     ax.set_ylabel(
-        r"$\langle \dot{\theta}^\mathrm{e}, \sin(100\theta + \varphi) \rangle$ (unitless)"
+        r"$\langle \dot{\theta}_i^\mathrm{e}, \sin(100\theta_i + \hat{\varphi}_i) \rangle$ (unitless)"
     )
     fig.savefig(
         phase_plot_path,
@@ -2277,6 +2371,33 @@ def _max_sv(
     tm = np.array([_transfer_matrix(f_, ss, t_step) for f_ in f])
     mag = np.array([scipy.linalg.svdvals(tm[k, :, :])[0] for k in range(tm.shape[0])])
     return mag
+
+def _average_nrmse(
+    reference: np.ndarray,
+    predicted: np.ndarray,
+) -> float:
+    """Calculate normalized root-mean-squared error, then average over states.
+
+    Normalized using maximum amplitude of reference trajectory.
+
+    Parameters
+    ----------
+    reference : np.ndarray
+        Reference trajectory, witout episode feature.
+    predicted : np.ndarray
+        Predicted trajectory, witout episode feature.
+
+    Returns
+    -------
+    np.ndarray
+        Average normalized root-mean-squared error.
+    """
+    ampl = np.max(np.abs(reference), axis=0)
+    e = reference - predicted
+    rmse = np.sqrt(np.mean(e**2, axis=0))
+    nrmse = rmse / ampl
+    avg_nrmse = np.mean(nrmse)
+    return avg_nrmse
 
 
 def _percent_error(

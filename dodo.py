@@ -506,6 +506,47 @@ def task_plot_observer():
         "clean": True,
     }
 
+def task_plot_summary():
+    """Plot summary."""
+    dataset = WD.joinpath("build/dataset.pickle")
+    uncertainty_linear = WD.joinpath("build", "uncertainty_linear_noload.pickle")
+    uncertainty_koopman = WD.joinpath("build", "uncertainty_koopman_noload.pickle")
+    models_linear = WD.joinpath("build", "models_linear.pickle")
+    models_koopman = WD.joinpath("build", "models_koopman.pickle")
+    observer_linear = WD.joinpath("build", "observer_linear.pickle")
+    observer_koopman = WD.joinpath("build", "observer_koopman.pickle")
+    summary = WD.joinpath("figures", "summary.pdf")
+    return {
+        "actions": [
+            (
+                actions.action_plot_summary,
+                (
+                    dataset,
+                    uncertainty_linear,
+                    uncertainty_koopman,
+                    models_linear,
+                    models_koopman,
+                    observer_linear,
+                    observer_koopman,
+                    summary,
+                ),
+            )
+        ],
+        "file_dep": [
+            dataset,
+            uncertainty_linear,
+            uncertainty_koopman,
+            models_linear,
+            models_koopman,
+            observer_linear,
+            observer_koopman,
+        ],
+        "targets": [
+            summary,
+        ],
+        "clean": True,
+    }
+
 
 def task_plot_phase():
     """Plot phase."""
