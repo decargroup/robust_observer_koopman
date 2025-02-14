@@ -1599,18 +1599,28 @@ def action_plot_summary(
     errors_koopman = np.array(errors_koopman_lst)
     fig, ax = plt.subplots(
         constrained_layout=True,
-        figsize=(LW, LW),
+        figsize=(LW, 0.5 * LW),
     )
     bplot = ax.boxplot(
-        [errors_linear, errors_koopman],
-        labels=["Linear", "Koopman"],
+        [
+            errors_koopman,
+            errors_linear,
+        ],
+        labels=[
+            "Koopman",
+            "Linear",
+        ],
         medianprops=dict(color=OKABE_ITO["black"]),
         patch_artist=True,
+        vert=False,
+        widths=0.5,
     )
-    ax.set_xlabel("Observer")
-    ax.set_ylabel("\%RMSE")
-    bplot["boxes"][0].set_facecolor(OKABE_ITO["vermillion"])
-    bplot["boxes"][1].set_facecolor(OKABE_ITO["blue"])
+    ax.set_xlabel("RMS error (\%)")
+    ax.set_xlim([0, 7])
+    ax.set_xticks(np.arange(0, 8))
+    ax.grid(visible=False, axis="y")
+    bplot["boxes"][0].set_facecolor(OKABE_ITO["blue"])
+    bplot["boxes"][1].set_facecolor(OKABE_ITO["vermillion"])
     fig.savefig(
         summary_path,
         **SAVEFIG_KW,
