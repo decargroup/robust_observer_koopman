@@ -1599,7 +1599,7 @@ def action_plot_summary(
     errors_koopman = np.array(errors_koopman_lst)
     fig, ax = plt.subplots(
         constrained_layout=True,
-        figsize=(LW, 0.5 * LW),
+        figsize=(LW, 0.33 * LW),
     )
     bplot = ax.boxplot(
         [
@@ -2771,7 +2771,7 @@ def _plot_weights(obs: Dict[str, Any]) -> Tuple[plt.Figure, plt.Axes]:
     """
     fig, ax = plt.subplots(
         constrained_layout=True,
-        figsize=(LW, LW),
+        figsize=(LW, 0.66 * LW),
     )
     ax.semilogx(
         obs["f"],
