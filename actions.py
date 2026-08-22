@@ -1585,42 +1585,79 @@ def action_plot_summary(
                 kp,
                 x0=x0,
             )
-            anrmse_linear = _average_nrmse(
+            nrmse_linear = _nrmse(
                 X_valid_noload[:, :3],
                 X_obs_linear_noload,
             ) * 100
-            anrmse_koopman = _average_nrmse(
+            nrmse_koopman = _nrmse(
                 X_valid_noload[:, :3],
                 X_obs_koopman_noload[:, :3],
             ) * 100
-            errors_linear_lst.append(anrmse_linear)
-            errors_koopman_lst.append(anrmse_koopman)
+            errors_linear_lst.append(nrmse_linear)
+            errors_koopman_lst.append(nrmse_koopman)
     errors_linear = np.array(errors_linear_lst)
     errors_koopman = np.array(errors_koopman_lst)
     fig, ax = plt.subplots(
+        3,
+        1,
         constrained_layout=True,
-        figsize=(LW, 0.33 * LW),
+        figsize=(LW, LW),
     )
-    bplot = ax.boxplot(
+    bplot_kwargs = {
+        "labels": ["Koopman", "Linear"],
+        "whis": (0, 100),
+        "medianprops": {"color": OKABE_ITO["black"]},
+        "showmeans": True,
+        "meanprops": {
+            "marker": "o",
+            "markerfacecolor": OKABE_ITO["black"],
+            "markeredgecolor": OKABE_ITO["black"],
+            "markersize": 4,
+        },
+        "patch_artist": True,
+        "vert": False,
+        "widths": 0.5,
+    }
+    bplot_pos = ax[0].boxplot(
         [
-            errors_koopman,
-            errors_linear,
+            errors_koopman[:, 0],
+            errors_linear[:, 0],
         ],
-        labels=[
-            "Koopman",
-            "Linear",
-        ],
-        medianprops=dict(color=OKABE_ITO["black"]),
-        patch_artist=True,
-        vert=False,
-        widths=0.5,
+        **bplot_kwargs,
     )
-    ax.set_xlabel("RMS error (\%)")
-    ax.set_xlim([0, 7])
-    ax.set_xticks(np.arange(0, 8))
-    ax.grid(visible=False, axis="y")
-    bplot["boxes"][0].set_facecolor(OKABE_ITO["blue"])
-    bplot["boxes"][1].set_facecolor(OKABE_ITO["vermillion"])
+    ax[0].set_xlabel(r"rms$(\theta^\mathrm{e})$ (\%)")
+    ax[0].set_xlim([0, 0.02])
+    ax[0].set_xticks(np.arange(0, 0.0225, 0.0025))
+    ax[0].grid(visible=False, axis="y")
+    ax[0].ticklabel_format(style="sci", scilimits=(-3, -3), axis="x")
+    bplot_pos["boxes"][0].set_facecolor(OKABE_ITO["blue"])
+    bplot_pos["boxes"][1].set_facecolor(OKABE_ITO["vermillion"])
+    bplot_vel = ax[1].boxplot(
+        [
+            errors_koopman[:, 1],
+            errors_linear[:, 1],
+        ],
+        **bplot_kwargs,
+    )
+    ax[1].set_xlabel(r"rms$(\dot{\theta}^\mathrm{e})$ (\%)")
+    ax[1].set_xlim([0, 4])
+    ax[1].set_xticks(np.arange(0, 4.5, 0.5))
+    ax[1].grid(visible=False, axis="y")
+    bplot_vel["boxes"][0].set_facecolor(OKABE_ITO["blue"])
+    bplot_vel["boxes"][1].set_facecolor(OKABE_ITO["vermillion"])
+    bplot_cur = ax[2].boxplot(
+        [
+            errors_koopman[:, 2],
+            errors_linear[:, 2],
+        ],
+        **bplot_kwargs,
+    )
+    ax[2].set_xlabel(r"rms$(i^\mathrm{e})$ (\%)")
+    ax[2].set_xlim([0, 16])
+    ax[2].set_xticks(np.arange(0, 18, 2))
+    ax[2].grid(visible=False, axis="y")
+    bplot_cur["boxes"][0].set_facecolor(OKABE_ITO["blue"])
+    bplot_cur["boxes"][1].set_facecolor(OKABE_ITO["vermillion"])
     fig.savefig(
         summary_path,
         **SAVEFIG_KW,
@@ -2393,32 +2430,31 @@ def _max_sv(
     mag = np.array([scipy.linalg.svdvals(tm[k, :, :])[0] for k in range(tm.shape[0])])
     return mag
 
-def _average_nrmse(
+def _nrmse(
     reference: np.ndarray,
     predicted: np.ndarray,
-) -> float:
-    """Calculate normalized root-mean-squared error, then average over states.
+) -> np.ndarray:
+    """Calculate normalized root-mean-squared error.
 
     Normalized using maximum amplitude of reference trajectory.
 
     Parameters
     ----------
     reference : np.ndarray
-        Reference trajectory, witout episode feature.
+        Reference trajectory, without episode feature.
     predicted : np.ndarray
-        Predicted trajectory, witout episode feature.
+        Predicted trajectory, without episode feature.
 
     Returns
     -------
     np.ndarray
-        Average normalized root-mean-squared error.
+        Normalized root-mean-squared error.
     """
     ampl = np.max(np.abs(reference), axis=0)
     e = reference - predicted
     rmse = np.sqrt(np.mean(e**2, axis=0))
     nrmse = rmse / ampl
-    avg_nrmse = np.mean(nrmse)
-    return avg_nrmse
+    return nrmse
 
 
 def _percent_error(
